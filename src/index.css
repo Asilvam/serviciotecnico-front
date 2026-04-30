@@ -1,0 +1,48 @@
+:root {
+  --text: #4a5565;
+  --text-h: #182230;
+  --bg: #f5f7fb;
+  --bg-elevated: #ffffff;
+  --border: #d9dee8;
+  --accent: #2456f5;
+  --accent-soft: rgba(36, 86, 245, 0.26);
+  --shadow-soft: 0 10px 22px rgba(16, 24, 40, 0.08);
+
+  font-family: Inter, 'Segoe UI', Roboto, Arial, sans-serif;
+  font-size: 17px;
+  line-height: 1.45;
+  color: var(--text);
+  background: var(--bg);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 768px;
+  background: var(--bg);
+}
+
+a {
+  color: inherit;
+}
+
+#root {
+  min-height: 100svh;
+}
+
+@media (max-width: 1024px) {
+  :root {
+    font-size: 16px;
+  }
+
+  body {
+    min-width: 0;
+  }
+}
