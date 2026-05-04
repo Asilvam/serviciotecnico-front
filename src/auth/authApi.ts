@@ -3,6 +3,15 @@ export type LoginPayload = {
   password: string
 }
 
+export type ProfileResponse = {
+  id?: string
+  _id?: string
+  email: string
+  name: string
+  role?: string
+  isActive?: boolean
+}
+
 type LoginApiResponse = {
   accessToken?: string
   token?: string
@@ -43,3 +52,22 @@ export async function loginRequest(payload: LoginPayload): Promise<string> {
   return token
 }
 
+export async function getProfileRequest(token: string): Promise<ProfileResponse> {
+  const baseUrl = import.meta.env.VITE_SERVER_URL
+  const url = `${baseUrl}/auth/profile`
+
+  const response = await fetch(url, {
+    method: 'GET',
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  })
+
+  const body = (await response.json().catch(() => ({}))) as ProfileResponse & { message?: string }
+
+  if (!response.ok) {
+    throw new Error(body.message ?? 'No fue posible obtener el perfil.')
+  }
+
+  return body
+}

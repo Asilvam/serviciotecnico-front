@@ -1,8 +1,8 @@
-import { useState, type FormEvent } from 'react'
+import { useState, type ComponentProps } from 'react'
 import Swal from 'sweetalert2'
 import { Link, useNavigate } from 'react-router-dom'
-import { loginRequest } from '../auth/authApi.ts'
-import { saveSession } from '../auth/session.ts'
+import { getProfileRequest, loginRequest } from '../auth/authApi.ts'
+import { saveSession, setSessionRole } from '../auth/session.ts'
 
 type LoginErrors = {
   email?: string
@@ -39,7 +39,7 @@ export default function LoginPage() {
   const [apiError, setApiError] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
 
-  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+  const handleSubmit: ComponentProps<'form'>['onSubmit'] = async (event) => {
     event.preventDefault()
     setApiError('')
 
@@ -58,6 +58,12 @@ export default function LoginPage() {
       })
 
       saveSession(token, email.trim())
+      try {
+        const profile = await getProfileRequest(token)
+        setSessionRole(profile.role)
+      } catch {
+        setSessionRole(undefined)
+      }
       await Swal.fire({
         icon: 'success',
         title: 'Sesion iniciada',
@@ -140,5 +146,3 @@ export default function LoginPage() {
     </div>
   )
 }
-
-

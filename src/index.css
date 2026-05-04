@@ -1,12 +1,28 @@
 :root {
-  --text: #4a5565;
-  --text-h: #182230;
-  --bg: #f5f7fb;
-  --bg-elevated: #ffffff;
-  --border: #d9dee8;
-  --accent: #2456f5;
-  --accent-soft: rgba(36, 86, 245, 0.26);
-  --shadow-soft: 0 10px 22px rgba(16, 24, 40, 0.08);
+  --navy-950: #1a2332;
+  --navy-800: #2c5f7c;
+  --cyan-500: #4a9fbf;
+  --copper-500: #e67e22;
+  --slate-900: #2c3e50;
+  --slate-600: #7f8c8d;
+  --slate-100: #ecf0f1;
+  --pure-white: #ffffff;
+  --ink-950: #1c1c1c;
+  --success-500: #27ae60;
+  --danger-500: #e74c3c;
+
+  --text: var(--slate-900);
+  --text-h: var(--ink-950);
+  --text-muted: var(--slate-600);
+  --bg: var(--slate-100);
+  --bg-elevated: var(--pure-white);
+  --bg-strong: var(--navy-950);
+  --border: color-mix(in srgb, var(--slate-600) 35%, transparent);
+  --accent: var(--navy-800);
+  --accent-hover: var(--cyan-500);
+  --accent-soft: color-mix(in srgb, var(--cyan-500) 22%, transparent);
+  --cta: var(--copper-500);
+  --shadow-soft: 0 12px 26px color-mix(in srgb, var(--navy-950) 16%, transparent);
 
   font-family: Inter, 'Segoe UI', Roboto, Arial, sans-serif;
   font-size: 17px;
@@ -26,7 +42,8 @@
 body {
   margin: 0;
   min-width: 768px;
-  background: var(--bg);
+  background: radial-gradient(circle at top, rgba(74, 159, 191, 0.18), transparent 55%),
+    var(--bg);
 }
 
 a {
