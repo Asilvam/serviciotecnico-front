@@ -20,7 +20,7 @@ import { buildDynamicOptions } from '../utils/dynamicOptions.ts'
 const statusLabels: Record<ServiceOrderStatus, string> = {
   pending: 'Pendiente',
   in_progress: 'En proceso',
-  waiting_parts: 'En espera de repuestos',
+  waiting_parts: 'Espera repuestos',
   completed: 'Completada',
   delivered: 'Entregada',
   cancelled: 'Cancelada',
@@ -642,7 +642,7 @@ export default function ServiceOrdersPage() {
                 <th>Creacion</th>
                 <th>Orden</th>
                 <th>Equipo</th>
-                <th>Estado</th>
+                <th className="col-status">Estado</th>
                 <th>Prioridad</th>
                 <th>Total</th>
                 <th>Acciones</th>
@@ -662,7 +662,7 @@ export default function ServiceOrdersPage() {
                     <div className="cell-title">{order.deviceType}</div>
                     <span className="cell-subtitle">{order.deviceBrand}</span>
                   </td>
-                  <td>
+                  <td className="col-status">
                     <span className="badge">{statusLabels[order.status ?? 'pending']}</span>
                   </td>
                   <td>{priorityLabels[order.priority ?? 'medium']}</td>

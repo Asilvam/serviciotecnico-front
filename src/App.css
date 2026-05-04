@@ -223,6 +223,13 @@
   white-space: nowrap;
 }
 
+.table-card th.col-status,
+.table-card td.col-status {
+  width: 150px;
+  min-width: 140px;
+  white-space: nowrap;
+}
+
 .items-table th:last-child,
 .items-table td:last-child {
   width: 120px;
