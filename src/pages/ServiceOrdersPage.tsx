@@ -482,14 +482,43 @@ export default function ServiceOrdersPage() {
         }
         const created = await serviceOrdersApi.create(payload)
         setOrders((prev) => [created.order, ...prev])
-        await Swal.fire({
+        
+        const printResult = await Swal.fire({
           icon: 'success',
           title: 'Orden creada',
-          text: 'La orden de servicio fue registrada.',
+          text: 'La orden de servicio fue registrada. ¿Deseas imprimir el ticket?',
+          showCancelButton: true,
+          confirmButtonText: 'Si, imprimir',
+          cancelButtonText: 'No, cerrar',
           confirmButtonColor: '#2c5f7c',
+          cancelButtonColor: '#7f8c8d',
         })
-      }
 
+        if (printResult.isConfirmed) {
+          const orderId = resolveOrderId(created.order)
+          if (orderId) {
+            try {
+              await serviceOrdersApi.print(orderId)
+              void Swal.fire({
+                toast: true,
+                position: 'top-end',
+                icon: 'success',
+                title: 'Comando de impresion enviado.',
+                showConfirmButton: false,
+                timer: 3000,
+              })
+            } catch (printError) {
+              const msg = printError instanceof Error ? printError.message : 'No fue posible enviar la orden a la impresora.'
+              void Swal.fire({
+                icon: 'error',
+                title: 'Error de impresion',
+                text: msg,
+                confirmButtonColor: '#2c5f7c',
+              })
+            }
+          }
+        }
+      }
       closePanel()
     } catch (error) {
       const message = error instanceof Error ? error.message : 'No fue posible guardar la orden.'
@@ -670,18 +699,53 @@ export default function ServiceOrdersPage() {
                   <td>
                     <div className="row-actions">
                       <button
-                        className="btn btn-ghost btn-small"
+                        className="btn btn-ghost btn-small btn-icon"
                         type="button"
                         onClick={() => openEditPanel(order)}
+                        aria-label="Editar orden"
+                        title="Editar"
                       >
-                        Editar
+                        ✏️
                       </button>
                       <button
-                        className="btn btn-secondary btn-small"
+                        className="btn btn-ghost btn-small btn-icon"
+                        type="button"
+                        onClick={async () => {
+                          const orderId = resolveOrderId(order)
+                          if (!orderId) return
+                          try {
+                            await serviceOrdersApi.print(orderId)
+                            void Swal.fire({
+                              toast: true,
+                              position: 'top-end',
+                              icon: 'success',
+                              title: 'Comando de impresion enviado.',
+                              showConfirmButton: false,
+                              timer: 3000,
+                            })
+                          } catch (printError) {
+                            const msg = printError instanceof Error ? printError.message : 'No fue posible enviar la orden a la impresora.'
+                            void Swal.fire({
+                              icon: 'error',
+                              title: 'Error de impresion',
+                              text: msg,
+                              confirmButtonColor: '#2c5f7c',
+                            })
+                          }
+                        }}
+                        aria-label="Imprimir orden"
+                        title="Imprimir ticket"
+                      >
+                        🖨️
+                      </button>
+                      <button
+                        className="btn btn-secondary btn-small btn-icon"
                         type="button"
                         onClick={() => handleDelete(order)}
+                        aria-label="Desactivar orden"
+                        title="Desactivar"
                       >
-                        Desactivar
+                        🚫
                       </button>
                     </div>
                   </td>

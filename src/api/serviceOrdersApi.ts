@@ -19,4 +19,7 @@ export const serviceOrdersApi = {
   remove(id: string) {
     return apiClient.delete<void>(`/service-orders/${id}`)
   },
+  print(id: string) {
+    return apiClient.post<{ message?: string }>(`/service-orders/${id}/print-80mm`, {})
+  },
 }
