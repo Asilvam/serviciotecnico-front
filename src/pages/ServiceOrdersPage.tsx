@@ -694,7 +694,7 @@ export default function ServiceOrdersPage() {
 
       {panelOpen && (
         <div className="modal-overlay" role="dialog" aria-modal="true" onClick={closePanel}>
-          <div className="modal" onClick={(event) => event.stopPropagation()}>
+          <div className="modal modal-lg" onClick={(event) => event.stopPropagation()}>
             <div className="modal-header">
               <div>
                 <h2>{selectedOrder ? 'Editar orden' : 'Nueva orden'}</h2>
