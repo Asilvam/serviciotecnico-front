@@ -545,6 +545,54 @@ export default function ServiceOrdersPage() {
     }
   }
 
+  const handlePrint = async (order: ServiceOrder) => {
+    const result = await Swal.fire({
+      icon: 'question',
+      title: 'Imprimir orden',
+      text: `Se imprimirá el ticket de la orden ${order.orderNumber || ''}.`,
+      showCancelButton: true,
+      confirmButtonText: 'Si, imprimir',
+      cancelButtonText: 'Cancelar',
+      confirmButtonColor: '#2c5f7c',
+      cancelButtonColor: '#7f8c8d',
+    })
+
+    if (!result.isConfirmed) {
+      return
+    }
+
+    const orderId = resolveOrderId(order)
+    if (!orderId) {
+      void Swal.fire({
+        icon: 'error',
+        title: 'Operacion fallida',
+        text: 'No fue posible identificar la orden.',
+        confirmButtonColor: '#2c5f7c',
+      })
+      return
+    }
+
+    try {
+      await serviceOrdersApi.print(orderId)
+      void Swal.fire({
+        toast: true,
+        position: 'top-end',
+        icon: 'success',
+        title: 'Comando de impresion enviado.',
+        showConfirmButton: false,
+        timer: 3000,
+      })
+    } catch (printError) {
+      const msg = printError instanceof Error ? printError.message : 'No fue posible enviar la orden a la impresora.'
+      void Swal.fire({
+        icon: 'error',
+        title: 'Error de impresion',
+        text: msg,
+        confirmButtonColor: '#2c5f7c',
+      })
+    }
+  }
+
   const handleDelete = async (order: ServiceOrder) => {
     const result = await Swal.fire({
       icon: 'warning',
@@ -722,29 +770,7 @@ export default function ServiceOrdersPage() {
                       <button
                         className="btn btn-ghost btn-small btn-icon"
                         type="button"
-                        onClick={async () => {
-                          const orderId = resolveOrderId(order)
-                          if (!orderId) return
-                          try {
-                            await serviceOrdersApi.print(orderId)
-                            void Swal.fire({
-                              toast: true,
-                              position: 'top-end',
-                              icon: 'success',
-                              title: 'Comando de impresion enviado.',
-                              showConfirmButton: false,
-                              timer: 3000,
-                            })
-                          } catch (printError) {
-                            const msg = printError instanceof Error ? printError.message : 'No fue posible enviar la orden a la impresora.'
-                            void Swal.fire({
-                              icon: 'error',
-                              title: 'Error de impresion',
-                              text: msg,
-                              confirmButtonColor: '#2c5f7c',
-                            })
-                          }
-                        }}
+                        onClick={() => handlePrint(order)}
                         aria-label="Imprimir orden"
                         title="Imprimir ticket"
                       >
