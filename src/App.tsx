@@ -1,7 +1,8 @@
 import { useEffect } from 'react'
 import Swal from 'sweetalert2'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { clearSession, getSession } from './auth/session.ts'
+import { getSession } from './auth/session.ts'
+import { useLogout } from './auth/useLogout.ts'
 import homeHero from './assets/servicio-tecnico-home-1.jpg'
 import homeThumbOne from './assets/servicio-tecnico-2.jpg'
 import homeThumbTwo from './assets/servicio-tecnico-3.jpg'
@@ -10,6 +11,7 @@ function App() {
   const location = useLocation()
   const navigate = useNavigate()
   const session = getSession()
+  const handleLogout = useLogout()
 
   useEffect(() => {
     if (!location.state || typeof location.state !== 'object') {
@@ -31,26 +33,6 @@ function App() {
       navigate('/', { replace: true })
     })
   }, [location.state, navigate])
-
-  const handleLogout = async () => {
-    const result = await Swal.fire({
-      icon: 'question',
-      title: 'Cerrar sesion',
-      text: 'Se cerrara tu sesion actual en este dispositivo.',
-      showCancelButton: true,
-      confirmButtonText: 'Si, salir',
-      cancelButtonText: 'Cancelar',
-      confirmButtonColor: '#2c5f7c',
-      cancelButtonColor: '#7f8c8d',
-    })
-
-    if (!result.isConfirmed) {
-      return
-    }
-
-    clearSession()
-    navigate('/', { replace: true })
-  }
 
   return (
     <div className="app-shell">

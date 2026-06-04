@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
-import Swal from 'sweetalert2'
-import { clearSession, getSession } from '../auth/session.ts'
+import { Link } from 'react-router-dom'
+import { getSession } from '../auth/session.ts'
+import { useLogout } from '../auth/useLogout.ts'
 
 type AdminLayoutProps = {
   title: string
@@ -19,27 +19,7 @@ export default function AdminLayout({
   children,
 }: AdminLayoutProps) {
   const session = getSession()
-  const navigate = useNavigate()
-
-  const handleLogout = async () => {
-    const result = await Swal.fire({
-      icon: 'question',
-      title: 'Cerrar sesion',
-      text: 'Se cerrara tu sesion actual en este dispositivo.',
-      showCancelButton: true,
-      confirmButtonText: 'Si, salir',
-      cancelButtonText: 'Cancelar',
-      confirmButtonColor: '#2c5f7c',
-      cancelButtonColor: '#7f8c8d',
-    })
-
-    if (!result.isConfirmed) {
-      return
-    }
-
-    clearSession()
-    navigate('/', { replace: true })
-  }
+  const handleLogout = useLogout()
 
   return (
     <div className="app-shell">

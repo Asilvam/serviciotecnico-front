@@ -1,3 +1,5 @@
+import { apiClient } from '../api/apiClient.ts'
+
 export type LoginPayload = {
   email: string
   password: string
@@ -27,22 +29,9 @@ function extractToken(response: LoginApiResponse): string | null {
 }
 
 export async function loginRequest(payload: LoginPayload): Promise<string> {
-  const baseUrl = import.meta.env.VITE_SERVER_URL
-  const url = `${baseUrl}/auth/login`
-
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(payload),
+  const body = await apiClient.post<LoginApiResponse>('/auth/login', payload, {
+    requiresAuth: false,
   })
-
-  const body = (await response.json().catch(() => ({}))) as LoginApiResponse
-
-  if (!response.ok) {
-    throw new Error(body.message ?? 'No fue posible iniciar sesion.')
-  }
 
   const token = extractToken(body)
   if (!token) {
@@ -53,21 +42,10 @@ export async function loginRequest(payload: LoginPayload): Promise<string> {
 }
 
 export async function getProfileRequest(token: string): Promise<ProfileResponse> {
-  const baseUrl = import.meta.env.VITE_SERVER_URL
-  const url = `${baseUrl}/auth/profile`
-
-  const response = await fetch(url, {
-    method: 'GET',
+  return apiClient.get<ProfileResponse>('/auth/profile', {
     headers: {
       Authorization: `Bearer ${token}`,
     },
+    requiresAuth: false,
   })
-
-  const body = (await response.json().catch(() => ({}))) as ProfileResponse & { message?: string }
-
-  if (!response.ok) {
-    throw new Error(body.message ?? 'No fue posible obtener el perfil.')
-  }
-
-  return body
 }

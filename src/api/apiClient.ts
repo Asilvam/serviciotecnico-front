@@ -1,75 +1,79 @@
+import axios, { type AxiosRequestConfig } from 'axios'
 import { getSession } from '../auth/session.ts'
 
-type ApiErrorResponse = {
-  message?: string
+type RequestOptions = {
+  headers?: Record<string, string>
+  requiresAuth?: boolean
 }
 
-type RequestOptions = Omit<RequestInit, 'body'> & {
-  body?: unknown
-}
+const axiosInstance = axios.create({
+  baseURL: import.meta.env.VITE_SERVER_URL,
+})
 
-function resolveBaseUrl(): string {
-  const baseUrl = import.meta.env.VITE_SERVER_URL
-  if (!baseUrl) {
-    throw new Error('No se encontro VITE_SERVER_URL configurado.')
+// Interceptamos peticiones para inyectar automáticamente el Bearer token si no se desactiva
+axiosInstance.interceptors.request.use(
+  (config) => {
+    // Si la petición tiene un flag personalizado requiresAuth en la configuración, lo leemos
+    const requiresAuth = (config as AxiosRequestConfig & { requiresAuth?: boolean }).requiresAuth ?? true
+    if (requiresAuth) {
+      const session = getSession()
+      if (session?.token) {
+        config.headers.Authorization = `Bearer ${session.token}`
+      }
+    }
+    return config
+  },
+  (error) => {
+    return Promise.reject(error)
   }
-  return baseUrl
-}
+)
 
-function resolveAuthToken(): string {
-  const session = getSession()
-  if (!session?.token) {
-    throw new Error('No hay sesion activa. Inicia sesion para continuar.')
+// Interceptamos respuestas para formatear el mensaje de error de forma consistente
+axiosInstance.interceptors.response.use(
+  (response) => {
+    return response
+  },
+  (error) => {
+    const errorBody = error.response?.data as { message?: string } | undefined
+    const message = errorBody?.message ?? error.message ?? 'Ocurrio un error al procesar la solicitud.'
+    return Promise.reject(new Error(message))
   }
-  return session.token
-}
-
-async function parseResponse<T>(response: Response): Promise<T> {
-  const text = await response.text()
-  if (!text) {
-    return undefined as T
-  }
-  return JSON.parse(text) as T
-}
-
-async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
-  const baseUrl = resolveBaseUrl()
-  const token = resolveAuthToken()
-  const headers = new Headers(options.headers)
-  headers.set('Authorization', `Bearer ${token}`)
-
-  if (options.body !== undefined) {
-    headers.set('Content-Type', 'application/json')
-  }
-
-  const response = await fetch(`${baseUrl}${path}`, {
-    ...options,
-    headers,
-    body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
-  })
-
-  if (!response.ok) {
-    const errorBody = await parseResponse<ApiErrorResponse>(response).catch(
-      (): ApiErrorResponse => ({}),
-    )
-    const message = errorBody?.message ?? 'Ocurrio un error al procesar la solicitud.'
-    throw new Error(message)
-  }
-
-  return parseResponse<T>(response)
-}
+)
 
 export const apiClient = {
-  get<T>(path: string) {
-    return request<T>(path, { method: 'GET' })
+  async get<T>(path: string, options: RequestOptions = {}): Promise<T> {
+    const config: AxiosRequestConfig & { requiresAuth?: boolean } = {
+      headers: options.headers,
+      requiresAuth: options.requiresAuth,
+    }
+    const response = await axiosInstance.get<T>(path, config)
+    return response.data
   },
-  post<T>(path: string, body: unknown) {
-    return request<T>(path, { method: 'POST', body })
+
+  async post<T>(path: string, body: unknown, options: RequestOptions = {}): Promise<T> {
+    const config: AxiosRequestConfig & { requiresAuth?: boolean } = {
+      headers: options.headers,
+      requiresAuth: options.requiresAuth,
+    }
+    const response = await axiosInstance.post<T>(path, body, config)
+    return response.data
   },
-  patch<T>(path: string, body: unknown) {
-    return request<T>(path, { method: 'PATCH', body })
+
+  async patch<T>(path: string, body: unknown, options: RequestOptions = {}): Promise<T> {
+    const config: AxiosRequestConfig & { requiresAuth?: boolean } = {
+      headers: options.headers,
+      requiresAuth: options.requiresAuth,
+    }
+    const response = await axiosInstance.patch<T>(path, body, config)
+    return response.data
   },
-  delete<T>(path: string) {
-    return request<T>(path, { method: 'DELETE' })
+
+  async delete<T>(path: string, options: RequestOptions = {}): Promise<T> {
+    const config: AxiosRequestConfig & { requiresAuth?: boolean } = {
+      headers: options.headers,
+      requiresAuth: options.requiresAuth,
+    }
+    const response = await axiosInstance.delete<T>(path, config)
+    return response.data
   },
 }

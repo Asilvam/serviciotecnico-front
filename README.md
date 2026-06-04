@@ -19,7 +19,7 @@ VITE_SERVER_URL=http://localhost:3500
 Si accedes desde otro equipo de la red (iPad, notebook, etc.), usa una URL alcanzable por ese equipo:
 
 ```dotenv
-VITE_SERVER_URL=http://192.168.3.160:3500
+VITE_SERVER_URL=http://:3500
 ```
 
 ## Scripts
@@ -64,6 +64,26 @@ npm run preview
 ## Notas de uso
 
 - El Home y el Dashboard muestran el email de la sesion activa.
-- El cierre de sesion pide confirmacion con SweetAlert2 y limpia `localStorage`.
+- El cierre de sesion pide confirmacion con SweetAlert2 a traves de un hook unificado y limpia `localStorage`.
 - El footer muestra la version de `package.json` via `__APP_VERSION__`.
+
+## Arquitectura y Buenas Prácticas
+
+El codigo del frontend sigue principios modernos de modularizacion y desacoplamiento de componentes para asegurar un mantenimiento escalable y limpio:
+
+### 1. Cliente API flexible (`src/api/apiClient.ts`)
+Centraliza todas las peticiones HTTP utilizando fetch. Soporta configuracion flexible por llamada:
+- `requiresAuth` (por defecto `true`): Añade de forma automatica la cabecera `Authorization: Bearer <token>`.
+- Para endpoints publicos (como login), se puede desactivar pasando la bandera `{ requiresAuth: false }` en las opciones.
+
+### 2. Cierre de sesion centralizado (`src/auth/useLogout.ts`)
+- Se centraliza el flujo interactivo de cierre de sesion en el custom hook `useLogout`. Este maneja el dialogo SweetAlert2, la limpieza del almacenamiento local y la redireccion de forma homogenea en toda la aplicacion.
+
+### 3. Modularizacion de vistas administrativas (`src/pages/<modulo>/`)
+Para evitar paginas masivas y de dificil mantenimiento, las vistas principales de administracion de datos se estructuran siguiendo una separacion estricta de responsabilidades:
+- **`use<Modulo>.ts`**: Custom hook que encapsula toda la logica de negocio, estado de React, llamadas de red y filtros de busqueda.
+- **`<Modulo>Table.tsx`**: Componente de presentacion dedicado exclusivamente a la maquetacion y visualizacion de la tabla de datos.
+- **`<Modulo>Form.tsx`**: Componente de presentacion para la visualizacion del modal overlay, los campos del formulario, las validaciones locales y los accesos de teclado nativos (como cerrar con Escape).
+- **`<Modulo>Page.tsx`**: Vista de entrada de la ruta que actua puramente como orquestador declarativo combinando el custom hook con los subcomponentes.
+
 
