@@ -57,6 +57,15 @@ const emptyOrder: ServiceOrderFormState = {
   items: [],
 }
 
+const getTomorrowDateString = (): string => {
+  const tomorrow = new Date()
+  tomorrow.setDate(tomorrow.getDate() + 1)
+  const year = tomorrow.getFullYear()
+  const month = String(tomorrow.getMonth() + 1).padStart(2, '0')
+  const day = String(tomorrow.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
 export default function ServiceOrdersPage() {
   const [orders, setOrders] = useState<ServiceOrder[]>([])
   const [customers, setCustomers] = useState<Customer[]>([])
@@ -175,7 +184,7 @@ export default function ServiceOrdersPage() {
         title: 'swal-form-title',
         htmlContainer: 'swal-form-body service-order-item-body',
         confirmButton: 'btn btn-primary swal-form-confirm',
-        cancelButton: 'btn btn-ghost swal-form-cancel',
+        cancelButton: 'btn btn-secondary swal-form-cancel',
       },
       focusConfirm: false,
       showCancelButton: true,
@@ -395,7 +404,10 @@ export default function ServiceOrdersPage() {
 
   const openCreatePanel = () => {
     setSelectedOrder(null)
-    setFormState(emptyOrder)
+    setFormState({
+      ...emptyOrder,
+      estimatedDelivery: getTomorrowDateString(),
+    })
     setPanelOpen(true)
   }
 
@@ -764,11 +776,13 @@ export default function ServiceOrdersPage() {
                 <h2>{selectedOrder ? 'Editar orden' : 'Nueva orden'}</h2>
                 <p>Completa la informacion requerida para guardar.</p>
               </div>
-              <button className="btn btn-ghost" type="button" onClick={closePanel}>
+              <button className="btn btn-secondary" type="button" onClick={closePanel}>
                 Cerrar
               </button>
             </div>
-            <form className="form-grid" onSubmit={handleSubmit}>
+            <form className="modal-form-wrapper" onSubmit={handleSubmit}>
+              <div className="modal-scroll-area">
+                <div className="form-grid">
               <label className="field">
                 <span>Cliente</span>
                 <select
@@ -900,7 +914,7 @@ export default function ServiceOrdersPage() {
                 <div className="admin-toolbar items-toolbar">
                   <div className="row-actions">
                     <button
-                      className="btn btn-ghost btn-small"
+                      className="btn btn-secondary btn-small"
                       type="button"
                       onClick={addItemRow}
                     >
@@ -993,39 +1007,41 @@ export default function ServiceOrdersPage() {
                   }
                 />
               </label>
-              <div className="form-actions field-full">
-                <button
-                  className="btn btn-primary"
-                  type="submit"
-                  aria-disabled={isEditing && !isUpdateDirty}
-                  disabled={isSaving}
-                  onClick={(event) => {
-                    if (isEditing && !isUpdateDirty) {
-                      event.preventDefault()
-                      void Swal.fire({
-                        toast: true,
-                        position: 'center',
-                        icon: 'info',
-                        title: 'No hay cambios para guardar.',
-                        showConfirmButton: false,
-                        timer: 2000,
-                        timerProgressBar: true,
-                      })
-                    }
-                  }}
-                >
-                  {isSaving && <span className="btn-spinner" aria-hidden="true" />}
-                  {isSaving
-                    ? 'Guardando...'
-                    : selectedOrder
-                      ? 'Guardar cambios'
-                      : 'Crear orden'}
-                </button>
-                <button className="btn btn-ghost" type="button" onClick={closePanel}>
-                  Cancelar
-                </button>
-              </div>
-            </form>
+            </div>
+          </div>
+          <div className="form-actions modal-footer-actions">
+            <button
+              className="btn btn-primary"
+              type="submit"
+              aria-disabled={isEditing && !isUpdateDirty}
+              disabled={isSaving}
+              onClick={(event) => {
+                if (isEditing && !isUpdateDirty) {
+                  event.preventDefault()
+                  void Swal.fire({
+                    toast: true,
+                    position: 'center',
+                    icon: 'info',
+                    title: 'No hay cambios para guardar.',
+                    showConfirmButton: false,
+                    timer: 2000,
+                    timerProgressBar: true,
+                  })
+                }
+              }}
+            >
+              {isSaving && <span className="btn-spinner" aria-hidden="true" />}
+              {isSaving
+                ? 'Guardando...'
+                : selectedOrder
+                  ? 'Guardar cambios'
+                  : 'Crear orden'}
+            </button>
+            <button className="btn btn-secondary" type="button" onClick={closePanel}>
+              Cancelar
+            </button>
+          </div>
+        </form>
           </div>
         </div>
       )}
