@@ -1,4 +1,4 @@
-import axios, { type AxiosRequestConfig } from 'axios'
+import axios, { type AxiosRequestConfig, type InternalAxiosRequestConfig } from 'axios'
 import { getSession } from '../auth/session.ts'
 
 type RequestOptions = {
@@ -15,7 +15,7 @@ const axiosInstance = axios.create({
 
 // Interceptamos peticiones para inyectar automáticamente el Bearer token si no se desactiva
 axiosInstance.interceptors.request.use(
-  (config) => {
+  (config: InternalAxiosRequestConfig) => {
     // Si la petición tiene un flag personalizado requiresAuth en la configuración, lo leemos
     const requiresAuth = (config as AxiosRequestConfig & { requiresAuth?: boolean }).requiresAuth ?? true
     if (requiresAuth) {
