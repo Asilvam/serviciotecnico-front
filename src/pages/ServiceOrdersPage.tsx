@@ -80,6 +80,11 @@ export default function ServiceOrdersPage() {
   const isEditing = Boolean(selectedOrder)
   const [isSaving, setIsSaving] = useState(false)
 
+  const isReadOnly = useMemo(() => {
+    if (!selectedOrder) return false
+    return ['delivered', 'cancelled'].includes(selectedOrder.status)
+  }, [selectedOrder])
+
   const resolveOrderId = (order: ServiceOrder) => order.id ?? order._id ?? ''
   const resolveCustomerId = (customer: Customer) => customer.id ?? customer._id ?? ''
   const resolveProductId = (product: Product) => product.id ?? product._id ?? ''
@@ -456,17 +461,40 @@ export default function ServiceOrdersPage() {
     setIsSaving(true)
 
     try {
-      if (selectedOrder) {
-        const orderId = resolveOrderId(selectedOrder)
-        if (!orderId) {
-          await Swal.fire({
-            icon: 'error',
-            title: 'Operacion fallida',
-            text: 'No fue posible identificar la orden seleccionada.',
-            confirmButtonColor: '#2c5f7c',
-          })
-          return
-        }
+        if (selectedOrder) {
+          const newStatus = formState.status ?? 'pending'
+          const oldStatus = selectedOrder.status ?? 'pending'
+          const isChangingToFinalState =
+            ['delivered', 'cancelled'].includes(newStatus) && newStatus !== oldStatus
+
+          if (isChangingToFinalState) {
+            const result = await Swal.fire({
+              icon: 'warning',
+              title: 'Confirmar cambio de estado',
+              text: `Estas a punto de cambiar el estado a "${statusLabels[newStatus]}". Una vez guardado, la orden no podra ser editada. ¿Deseas continuar?`,
+              showCancelButton: true,
+              confirmButtonText: 'Si, continuar',
+              cancelButtonText: 'Cancelar',
+              confirmButtonColor: '#2c5f7c',
+              cancelButtonColor: '#e67e22',
+            })
+
+            if (!result.isConfirmed) {
+              setIsSaving(false)
+              return
+            }
+          }
+
+          const orderId = resolveOrderId(selectedOrder)
+          if (!orderId) {
+            await Swal.fire({
+              icon: 'error',
+              title: 'Operacion fallida',
+              text: 'No fue posible identificar la orden seleccionada.',
+              confirmButtonColor: '#2c5f7c',
+            })
+            return
+          }
 
         const payload: UpdateServiceOrderPayload = normalizeUpdatePayload(formState)
         const updated = await serviceOrdersApi.update(orderId, payload)
@@ -758,15 +786,27 @@ export default function ServiceOrdersPage() {
                   <td>${(order.totalCost ?? 0).toLocaleString('es-CL')}</td>
                   <td>
                     <div className="row-actions">
-                      <button
-                        className="btn btn-ghost btn-small btn-icon"
-                        type="button"
-                        onClick={() => openEditPanel(order)}
-                        aria-label="Editar orden"
-                        title="Editar"
-                      >
-                        ✏️
-                      </button>
+                      {['delivered', 'cancelled'].includes(order.status) ? (
+                        <button
+                          className="btn btn-ghost btn-small btn-icon"
+                          type="button"
+                          onClick={() => openEditPanel(order)}
+                          aria-label="Ver orden"
+                          title="Ver"
+                        >
+                          👁️
+                        </button>
+                      ) : (
+                        <button
+                          className="btn btn-ghost btn-small btn-icon"
+                          type="button"
+                          onClick={() => openEditPanel(order)}
+                          aria-label="Editar orden"
+                          title="Editar"
+                        >
+                          ✏️
+                        </button>
+                      )}
                       <button
                         className="btn btn-ghost btn-small btn-icon"
                         type="button"
@@ -797,11 +837,15 @@ export default function ServiceOrdersPage() {
       {panelOpen && (
         <div className="modal-overlay" role="dialog" aria-modal="true" onClick={closePanel}>
           <div className="modal modal-lg" onClick={(event) => event.stopPropagation()}>
-            <div className="modal-header">
-              <div>
-                <h2>{selectedOrder ? 'Editar orden' : 'Nueva orden'}</h2>
-                <p>Completa la informacion requerida para guardar.</p>
-              </div>
+              <div className="modal-header">
+                <div>
+                  <h2>{isReadOnly ? 'Ver orden' : selectedOrder ? 'Editar orden' : 'Nueva orden'}</h2>
+                  <p>
+                    {isReadOnly
+                      ? 'Esta orden esta finalizada y no puede ser modificada.'
+                      : 'Completa la informacion requerida para guardar.'}
+                  </p>
+                </div>
               <button className="btn btn-secondary" type="button" onClick={closePanel}>
                 Cerrar
               </button>
@@ -812,12 +856,12 @@ export default function ServiceOrdersPage() {
               <label className="field">
                 <span>Cliente</span>
                 <select
-                  value={formState.customerId}
-                  onChange={(event) =>
-                    setFormState((prev) => ({ ...prev, customerId: event.target.value }))
-                  }
-                  required
-                  disabled={isEditing}
+                   value={formState.customerId}
+                   onChange={(event) =>
+                     setFormState((prev) => ({ ...prev, customerId: event.target.value }))
+                   }
+                   required
+                   disabled={isEditing || isReadOnly}
                 >
                   <option value="">Selecciona un cliente</option>
                   {customerOptions.map((customer) => (
@@ -836,6 +880,7 @@ export default function ServiceOrdersPage() {
                     setFormState((prev) => ({ ...prev, deviceType: event.target.value }))
                   }
                   required
+                  disabled={isReadOnly}
                 />
               </label>
               <label className="field field-full">
@@ -847,6 +892,7 @@ export default function ServiceOrdersPage() {
                     setFormState((prev) => ({ ...prev, deviceBrand: event.target.value }))
                   }
                   required
+                  disabled={isReadOnly}
                 />
               </label>
               <label className="field">
@@ -857,6 +903,7 @@ export default function ServiceOrdersPage() {
                   onChange={(event) =>
                     setFormState((prev) => ({ ...prev, deviceModel: event.target.value }))
                   }
+                  disabled={isReadOnly}
                 />
               </label>
               <label className="field">
@@ -867,6 +914,7 @@ export default function ServiceOrdersPage() {
                   onChange={(event) =>
                     setFormState((prev) => ({ ...prev, serialNumber: event.target.value }))
                   }
+                  disabled={isReadOnly}
                 />
               </label>
               <label className="field field-full">
@@ -878,6 +926,7 @@ export default function ServiceOrdersPage() {
                     setFormState((prev) => ({ ...prev, problemDescription: event.target.value }))
                   }
                   required
+                  disabled={isReadOnly}
                 />
               </label>
               <label className="field">
@@ -887,6 +936,7 @@ export default function ServiceOrdersPage() {
                   onChange={(event) =>
                     setFormState((prev) => ({ ...prev, status: event.target.value as ServiceOrderStatus }))
                   }
+                  disabled={isReadOnly}
                 >
                   {Object.entries(statusLabels).map(([value, label]) => (
                     <option key={value} value={value}>
@@ -902,6 +952,7 @@ export default function ServiceOrdersPage() {
                   onChange={(event) =>
                     setFormState((prev) => ({ ...prev, priority: event.target.value as ServiceOrderPriority }))
                   }
+                  disabled={isReadOnly}
                 >
                   {Object.entries(priorityLabels).map(([value, label]) => (
                     <option key={value} value={value}>
@@ -917,6 +968,7 @@ export default function ServiceOrdersPage() {
                   onChange={(event) =>
                     setFormState((prev) => ({ ...prev, technicianId: event.target.value }))
                   }
+                  disabled={isReadOnly}
                 >
                   <option value="">Sin asignar</option>
                   {technicianOptions.map((technician) => (
@@ -934,6 +986,7 @@ export default function ServiceOrdersPage() {
                   onChange={(event) =>
                     setFormState((prev) => ({ ...prev, estimatedDelivery: event.target.value }))
                   }
+                  disabled={isReadOnly}
                 />
               </label>
               <div className="table-card field-full">
@@ -943,6 +996,7 @@ export default function ServiceOrdersPage() {
                       className="btn btn-secondary btn-small"
                       type="button"
                       onClick={addItemRow}
+                      disabled={isReadOnly}
                     >
                       Agregar item
                     </button>
@@ -981,6 +1035,7 @@ export default function ServiceOrdersPage() {
                               onClick={() => removeItemRow(index)}
                               aria-label="Eliminar item"
                               title="Eliminar"
+                              disabled={isReadOnly}
                             >
                               🗑
                             </button>
@@ -1011,6 +1066,7 @@ export default function ServiceOrdersPage() {
                       laborCost: value === '' ? undefined : Number(value),
                     }))
                   }}
+                  disabled={isReadOnly}
                 />
               </label>
               <label className="field field-full">
@@ -1021,6 +1077,7 @@ export default function ServiceOrdersPage() {
                   onChange={(event) =>
                     setFormState((prev) => ({ ...prev, diagnosis: event.target.value }))
                   }
+                  disabled={isReadOnly}
                 />
               </label>
               <label className="field field-full">
@@ -1031,38 +1088,37 @@ export default function ServiceOrdersPage() {
                   onChange={(event) =>
                     setFormState((prev) => ({ ...prev, workDone: event.target.value }))
                   }
+                  disabled={isReadOnly}
                 />
               </label>
             </div>
           </div>
           <div className="form-actions modal-footer-actions">
-            <button
-              className="btn btn-primary"
-              type="submit"
-              aria-disabled={isEditing && !isUpdateDirty}
-              disabled={isSaving}
-              onClick={(event) => {
-                if (isEditing && !isUpdateDirty) {
-                  event.preventDefault()
-                  void Swal.fire({
-                    toast: true,
-                    position: 'center',
-                    icon: 'info',
-                    title: 'No hay cambios para guardar.',
-                    showConfirmButton: false,
-                    timer: 2000,
-                    timerProgressBar: true,
-                  })
-                }
-              }}
-            >
-              {isSaving && <span className="btn-spinner" aria-hidden="true" />}
-              {isSaving
-                ? 'Guardando...'
-                : selectedOrder
-                  ? 'Guardar cambios'
-                  : 'Crear orden'}
-            </button>
+            {isReadOnly ? null : (
+              <button
+                className="btn btn-primary"
+                type="submit"
+                aria-disabled={isEditing && !isUpdateDirty}
+                disabled={isSaving}
+                onClick={(event) => {
+                  if (isEditing && !isUpdateDirty) {
+                    event.preventDefault()
+                    void Swal.fire({
+                      toast: true,
+                      position: 'center',
+                      icon: 'info',
+                      title: 'No hay cambios para guardar.',
+                      showConfirmButton: false,
+                      timer: 2000,
+                      timerProgressBar: true,
+                    })
+                  }
+                }}
+              >
+                {isSaving && <span className="btn-spinner" aria-hidden="true" />}
+                {isSaving ? 'Guardando...' : selectedOrder ? 'Guardar cambios' : 'Crear orden'}
+              </button>
+            )}
             <button className="btn btn-secondary" type="button" onClick={closePanel}>
               Cancelar
             </button>
