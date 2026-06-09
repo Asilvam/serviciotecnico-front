@@ -15,12 +15,13 @@ const axiosInstance = axios.create({
 
 // Interceptamos peticiones para inyectar automáticamente el Bearer token si no se desactiva
 axiosInstance.interceptors.request.use(
-  (config) => {
+  (config: InternalAxiosRequestConfig) => {
     // Si la petición tiene un flag personalizado requiresAuth en la configuración, lo leemos
     const requiresAuth = (config as AxiosRequestConfig & { requiresAuth?: boolean }).requiresAuth ?? true
     if (requiresAuth) {
       const session = getSession()
       if (session?.token) {
+        config.headers = config.headers || {};
         config.headers.Authorization = `Bearer ${session.token}`
       }
     }
@@ -75,7 +76,7 @@ export const apiClient = {
 
     const config: AxiosRequestConfig & { requiresAuth?: boolean } = {
       headers: options.headers,
-      requiresAuth: options.requiresAuth,
+      requiresAuth: options.requires.Auth,
     }
     const response = await axiosInstance.get<T>(path, config)
     getCache.set(path, { data: response.data, expiresAt: now + CACHE_TTL })
