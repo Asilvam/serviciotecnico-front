@@ -82,7 +82,7 @@ export default function ServiceOrdersPage() {
 
   const isReadOnly = useMemo(() => {
     if (!selectedOrder) return false
-    return ['delivered', 'cancelled'].includes(selectedOrder.status)
+    return ['delivered', 'cancelled'].includes(selectedOrder.status ?? 'pending')
   }, [selectedOrder])
 
   const resolveOrderId = (order: ServiceOrder) => order.id ?? order._id ?? ''
@@ -786,7 +786,7 @@ export default function ServiceOrdersPage() {
                   <td>${(order.totalCost ?? 0).toLocaleString('es-CL')}</td>
                   <td>
                     <div className="row-actions">
-                      {['delivered', 'cancelled'].includes(order.status) ? (
+                      {['delivered', 'cancelled'].includes(order.status ?? 'pending') ? (
                         <button
                           className="btn btn-ghost btn-small btn-icon"
                           type="button"
