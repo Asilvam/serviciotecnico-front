@@ -1,4 +1,4 @@
-import axios, { type AxiosRequestConfig, type InternalAxiosRequestConfig } from 'axios'
+import axios, { type AxiosRequestConfig } from 'axios'
 import { getSession } from '../auth/session.ts'
 
 type RequestOptions = {
@@ -15,13 +15,12 @@ const axiosInstance = axios.create({
 
 // Interceptamos peticiones para inyectar automáticamente el Bearer token si no se desactiva
 axiosInstance.interceptors.request.use(
-  (config: InternalAxiosRequestConfig) => {
+  (config) => {
     // Si la petición tiene un flag personalizado requiresAuth en la configuración, lo leemos
     const requiresAuth = (config as AxiosRequestConfig & { requiresAuth?: boolean }).requiresAuth ?? true
     if (requiresAuth) {
       const session = getSession()
       if (session?.token) {
-        config.headers = config.headers || {};
         config.headers.Authorization = `Bearer ${session.token}`
       }
     }
@@ -56,7 +55,7 @@ function invalidateCache(path: string) {
   const segments = path.split('/').filter(Boolean)
   if (segments.length === 0) return
   const baseResource = `/${segments[0]}`
-  
+
   for (const key of getCache.keys()) {
     if (key.startsWith(baseResource)) {
       getCache.delete(key)
@@ -76,7 +75,7 @@ export const apiClient = {
 
     const config: AxiosRequestConfig & { requiresAuth?: boolean } = {
       headers: options.headers,
-      requiresAuth: options.requires.Auth,
+      requiresAuth: options.requiresAuth,
     }
     const response = await axiosInstance.get<T>(path, config)
     getCache.set(path, { data: response.data, expiresAt: now + CACHE_TTL })
