@@ -15,7 +15,7 @@ const axiosInstance = axios.create({
 
 // Interceptamos peticiones para inyectar automáticamente el Bearer token si no se desactiva
 axiosInstance.interceptors.request.use(
-  (config: InternalAxiosRequestConfig) => {
+  (config) => {
     // Si la petición tiene un flag personalizado requiresAuth en la configuración, lo leemos
     const requiresAuth = (config as AxiosRequestConfig & { requiresAuth?: boolean }).requiresAuth ?? true
     if (requiresAuth) {
