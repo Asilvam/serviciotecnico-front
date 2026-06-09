@@ -10,7 +10,7 @@ type RequestOptions = {
 console.log('API Client: VITE_SERVER_URL es', import.meta.env.VITE_SERVER_URL)
 
 const axiosInstance = axios.create({
-  baseURL: 'http://localhost:3500',
+  baseURL: import.meta.env.VITE_SERVER_URL || 'http://localhost:3500',
 })
 
 // Interceptamos peticiones para inyectar automáticamente el Bearer token si no se desactiva
