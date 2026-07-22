@@ -85,6 +85,16 @@ const technicianStatusTransitions: Partial<Record<ServiceOrderStatus, ServiceOrd
   waiting_parts: ['in_progress', 'completed'],
 }
 
+const selectChangedFields = (
+  current: UpdateServiceOrderPayload,
+  initial: UpdateServiceOrderPayload,
+): UpdateServiceOrderPayload =>
+  Object.fromEntries(
+    (Object.keys(current) as Array<keyof UpdateServiceOrderPayload>)
+      .filter((field) => JSON.stringify(current[field]) !== JSON.stringify(initial[field]))
+      .map((field) => [field, current[field]]),
+  ) as UpdateServiceOrderPayload
+
 export default function ServiceOrdersPage() {
   const role = getSession()?.role
   const isAdmin = role === 'admin'
@@ -598,7 +608,8 @@ export default function ServiceOrdersPage() {
             return
           }
 
-        const payload: UpdateServiceOrderPayload = normalizeUpdatePayload(formState, selectedOrder)
+        const currentPayload = normalizeUpdatePayload(formState, selectedOrder)
+        const payload = selectChangedFields(currentPayload, initialUpdatePayload ?? {})
         const updated = await serviceOrdersApi.update(orderId, payload)
         setOrders((prev) =>
           prev.map((item) => (resolveOrderId(item) === resolveOrderId(updated) ? updated : item)),
