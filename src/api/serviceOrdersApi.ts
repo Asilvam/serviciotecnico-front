@@ -1,6 +1,7 @@
 import { apiClient } from './apiClient.ts'
 import type {
   CreateServiceOrderPayload,
+  PrintTicketResult,
   ServiceOrder,
   ServiceOrderCreateResponse,
   UpdateServiceOrderPayload,
@@ -20,6 +21,6 @@ export const serviceOrdersApi = {
     return apiClient.delete<void>(`/service-orders/${id}`)
   },
   print(id: string) {
-    return apiClient.post<{ message?: string }>(`/service-orders/${id}/print-80mm`, {})
+    return apiClient.post<PrintTicketResult>(`/service-orders/${id}/print-80mm`, {})
   },
 }

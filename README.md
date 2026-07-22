@@ -67,6 +67,13 @@ npm run preview
 - El cierre de sesion pide confirmacion con SweetAlert2 a traves de un hook unificado y limpia `localStorage`.
 - El footer muestra la version de `package.json` via `__APP_VERSION__`.
 
+## Flujo de impresion de ordenes
+
+- Al crear una orden de servicio, el frontend muestra una confirmacion para imprimir el ticket.
+- Solo si el usuario confirma, el frontend llama `POST /service-orders/:id/print-80mm`.
+- Desde el listado de ordenes tambien se puede disparar impresion manual por fila.
+- El backend no imprime automaticamente al crear la orden; la impresion es un paso manual y explicito.
+
 ## Arquitectura y Buenas Prácticas
 
 El codigo del frontend sigue principios modernos de modularizacion y desacoplamiento de componentes para asegurar un mantenimiento escalable y limpio:
@@ -85,5 +92,4 @@ Para evitar paginas masivas y de dificil mantenimiento, las vistas principales d
 - **`<Modulo>Table.tsx`**: Componente de presentacion dedicado exclusivamente a la maquetacion y visualizacion de la tabla de datos.
 - **`<Modulo>Form.tsx`**: Componente de presentacion para la visualizacion del modal overlay, los campos del formulario, las validaciones locales y los accesos de teclado nativos (como cerrar con Escape).
 - **`<Modulo>Page.tsx`**: Vista de entrada de la ruta que actua puramente como orquestador declarativo combinando el custom hook con los subcomponentes.
-
 

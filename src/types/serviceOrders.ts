@@ -74,3 +74,13 @@ export type ServiceOrderCreateResponse = {
     }
   }
 }
+
+export type PrintTicketResult = {
+  orderId: string
+  orderNumber: string
+  mimeType: 'text/plain'
+  content: string
+  width: number
+  paperWidthMm: number
+  generatedAt: string
+}
