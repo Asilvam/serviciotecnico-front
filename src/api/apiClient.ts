@@ -44,12 +44,18 @@ axiosInstance.interceptors.response.use(
 )
 
 interface CacheEntry {
-  data: any
+  data: unknown
   expiresAt: number
 }
 
 const getCache = new Map<string, CacheEntry>()
 const CACHE_TTL = 30000 // 30 segundos de duración del caché
+
+function buildCacheKey(path: string, options: RequestOptions): string {
+  const explicitAuthorization = options.headers?.Authorization
+  const sessionToken = options.requiresAuth === false ? undefined : getSession()?.token
+  return `${explicitAuthorization ?? sessionToken ?? 'public'}::${path}`
+}
 
 function invalidateCache(path: string) {
   const segments = path.split('/').filter(Boolean)
@@ -57,7 +63,8 @@ function invalidateCache(path: string) {
   const baseResource = `/${segments[0]}`
 
   for (const key of getCache.keys()) {
-    if (key.startsWith(baseResource)) {
+    const cachedPath = key.slice(key.indexOf('::') + 2)
+    if (cachedPath.startsWith(baseResource)) {
       getCache.delete(key)
     }
   }
@@ -66,8 +73,9 @@ function invalidateCache(path: string) {
 export const apiClient = {
   async get<T>(path: string, options: RequestOptions = {}): Promise<T> {
     const now = Date.now()
+    const cacheKey = buildCacheKey(path, options)
     if (!options.bypassCache) {
-      const cached = getCache.get(path)
+      const cached = getCache.get(cacheKey)
       if (cached && cached.expiresAt > now) {
         return cached.data as T
       }
@@ -78,7 +86,7 @@ export const apiClient = {
       requiresAuth: options.requiresAuth,
     }
     const response = await axiosInstance.get<T>(path, config)
-    getCache.set(path, { data: response.data, expiresAt: now + CACHE_TTL })
+    getCache.set(cacheKey, { data: response.data, expiresAt: now + CACHE_TTL })
     return response.data
   },
 

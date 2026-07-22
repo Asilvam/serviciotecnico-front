@@ -3,6 +3,8 @@ import Swal from 'sweetalert2'
 import AdminLayout from '../components/AdminLayout.tsx'
 import { techniciansApi } from '../api/techniciansApi.ts'
 import type { Technician, TechnicianPayload, TechnicianSpecialty } from '../types/technicians.ts'
+import { getSession } from '../auth/session.ts'
+import { hasCapability } from '../auth/capabilities.ts'
 
 const emptyTechnician: TechnicianPayload = {
   name: '',
@@ -19,6 +21,7 @@ const specialtyLabels: Record<TechnicianSpecialty, string> = {
 }
 
 export default function TechniciansPage() {
+  const canManage = hasCapability(getSession()?.role, 'manage_technicians')
   const [technicians, setTechnicians] = useState<Technician[]>([])
   const [status, setStatus] = useState<'idle' | 'loading' | 'error'>('loading')
   const [errorMessage, setErrorMessage] = useState('')
@@ -248,9 +251,9 @@ export default function TechniciansPage() {
   return (
     <AdminLayout
       title="Tecnicos"
-      subtitle="Administra el equipo tecnico y sus especialidades activas."
-      actionLabel="Nuevo tecnico"
-      onAction={openCreatePanel}
+      subtitle={canManage ? 'Administra el equipo tecnico y sus especialidades activas.' : 'Consulta el equipo tecnico y sus especialidades activas.'}
+      actionLabel={canManage ? 'Nuevo tecnico' : undefined}
+      onAction={canManage ? openCreatePanel : undefined}
     >
       <div className="admin-toolbar">
         <label className="search-field">
@@ -285,9 +288,9 @@ export default function TechniciansPage() {
       {status === 'idle' && filteredTechnicians.length === 0 && (
         <div className="state-card">
           <p>No hay tecnicos activos registrados.</p>
-          <button className="btn btn-secondary" type="button" onClick={openCreatePanel}>
+          {canManage && <button className="btn btn-secondary" type="button" onClick={openCreatePanel}>
             Crear primer tecnico
-          </button>
+          </button>}
         </div>
       )}
 
@@ -299,7 +302,7 @@ export default function TechniciansPage() {
                 <th>Tecnico</th>
                 <th>Contacto</th>
                 <th>Especialidad</th>
-                <th>Acciones</th>
+                {canManage && <th>Acciones</th>}
               </tr>
             </thead>
             <tbody>
@@ -313,7 +316,7 @@ export default function TechniciansPage() {
                   <td>
                     <span className="badge">{specialtyLabels[technician.specialty ?? 'general']}</span>
                   </td>
-                  <td>
+                  {canManage && <td>
                     <div className="row-actions">
                       <button
                         className="btn btn-ghost btn-small"
@@ -330,7 +333,7 @@ export default function TechniciansPage() {
                         Desactivar
                       </button>
                     </div>
-                  </td>
+                  </td>}
                 </tr>
               ))}
             </tbody>
@@ -338,7 +341,7 @@ export default function TechniciansPage() {
         </div>
       )}
 
-      {panelOpen && (
+      {canManage && panelOpen && (
         <div className="modal-overlay" role="dialog" aria-modal="true" onClick={closePanel}>
           <div className="modal" onClick={(event) => event.stopPropagation()}>
             <div className="modal-header">

@@ -11,6 +11,7 @@ export type ProfileResponse = {
   email: string
   name: string
   role?: string
+  technicianId?: string
   isActive?: boolean
 }
 
@@ -47,5 +48,6 @@ export async function getProfileRequest(token: string): Promise<ProfileResponse>
       Authorization: `Bearer ${token}`,
     },
     requiresAuth: false,
+    bypassCache: true,
   })
 }

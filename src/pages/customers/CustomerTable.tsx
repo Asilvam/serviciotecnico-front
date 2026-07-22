@@ -16,6 +16,7 @@ type CustomerTableProps = {
    * @param customer Objeto de datos del cliente seleccionado para desactivar.
    */
   onDelete: (customer: Customer) => void
+  canDeactivate: boolean
   /**
    * Función de utilidad para resolver de forma segura el identificador único del cliente.
    * Resuelve diferencias de esquema (ej. `id` vs `_id`).
@@ -48,6 +49,7 @@ export default function CustomerTable({
   customers,
   onEdit,
   onDelete,
+  canDeactivate,
   resolveCustomerId,
 }: CustomerTableProps) {
   return (
@@ -72,13 +74,13 @@ export default function CustomerTable({
               <td>{customer.address || 'Sin direccion'}</td>
               <td>
                 <div className="row-actions">
-                  <button
+                  {canDeactivate && <button
                     className="btn btn-ghost btn-small"
                     type="button"
                     onClick={() => onEdit(customer)}
                   >
                     Editar
-                  </button>
+                  </button>}
                   <button
                     className="btn btn-secondary btn-small"
                     type="button"

@@ -1,8 +1,9 @@
-import { useEffect } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import Swal from 'sweetalert2'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { getSession } from './auth/session.ts'
 import { useLogout } from './auth/useLogout.ts'
+import AppFooter from './components/AppFooter.tsx'
 import homeHero from './assets/servicio-tecnico-home-1.jpg'
 import homeThumbOne from './assets/servicio-tecnico-2.jpg'
 import homeThumbTwo from './assets/servicio-tecnico-3.jpg'
@@ -12,6 +13,25 @@ function App() {
   const navigate = useNavigate()
   const session = getSession()
   const handleLogout = useLogout()
+  const mediaItems = useMemo(
+    () => [
+      {
+        src: homeHero,
+        alt: 'Tecnico revisando un equipo de servicio',
+      },
+      {
+        src: homeThumbOne,
+        alt: 'Mesa de reparacion con herramientas de diagnostico',
+      },
+      {
+        src: homeThumbTwo,
+        alt: 'Tecnico realizando mantenimiento a dispositivo electronico',
+      },
+    ],
+    [],
+  )
+  const [activeMediaIndex, setActiveMediaIndex] = useState(0)
+  const activeMedia = mediaItems[activeMediaIndex] ?? mediaItems[0]
 
   useEffect(() => {
     if (!location.state || typeof location.state !== 'object') {
@@ -65,8 +85,8 @@ function App() {
         </div>
       </header>
 
-      <main className="container main-content">
-        <section className="panel home-panel">
+      <main className="container main-content home-main">
+        <section className="panel home-panel home-panel-shell">
           <div className="home-hero">
             <div className="home-copy">
               <h1>Sistema Servicio Tecnico</h1>
@@ -86,24 +106,29 @@ function App() {
             <div className="home-media">
               <img
                 className="home-hero-image"
-                src={homeHero}
-                alt="Tecnico revisando un equipo de servicio"
+                src={activeMedia.src}
+                alt={activeMedia.alt}
               />
-              <div className="home-thumbs" aria-hidden="true">
-                <img src={homeThumbOne} alt="" />
-                <img src={homeThumbTwo} alt="" />
+              <div className="home-thumbs" aria-label="Galeria de imagenes">
+                {mediaItems.map((item, index) => (
+                  <button
+                    key={item.src}
+                    type="button"
+                    className={`home-thumb-button ${index === activeMediaIndex ? 'is-active' : ''}`}
+                    onClick={() => setActiveMediaIndex(index)}
+                    aria-label={`Ver imagen ${index + 1}`}
+                    aria-pressed={index === activeMediaIndex}
+                  >
+                    <img src={item.src} alt={item.alt} />
+                  </button>
+                ))}
               </div>
             </div>
           </div>
         </section>
       </main>
 
-      <footer className="footer">
-        <div className="container footer-inner">
-          <span>Servicio Tecnico</span>
-          <span>v{__APP_VERSION__}</span>
-        </div>
-      </footer>
+      <AppFooter />
     </div>
   )
 }

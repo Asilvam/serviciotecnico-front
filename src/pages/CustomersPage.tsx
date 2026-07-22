@@ -2,8 +2,12 @@ import AdminLayout from '../components/AdminLayout.tsx'
 import { useCustomers } from './customers/useCustomers.ts'
 import CustomerTable from './customers/CustomerTable.tsx'
 import CustomerForm from './customers/CustomerForm.tsx'
+import { getSession } from '../auth/session.ts'
+import { hasCapability } from '../auth/capabilities.ts'
 
 export default function CustomersPage() {
+  const role = getSession()?.role
+  const canDeactivate = hasCapability(role, 'deactivate_customers')
   const {
     status,
     errorMessage,
@@ -77,6 +81,7 @@ export default function CustomersPage() {
           customers={filteredCustomers}
           onEdit={openEditPanel}
           onDelete={handleDelete}
+          canDeactivate={canDeactivate}
           resolveCustomerId={resolveCustomerId}
         />
       )}

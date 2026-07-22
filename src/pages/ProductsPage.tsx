@@ -2,17 +2,26 @@ import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react
 import Swal from 'sweetalert2'
 import AdminLayout from '../components/AdminLayout.tsx'
 import { productsApi } from '../api/productsApi.ts'
-import type { Product, ProductPayload } from '../types/products.ts'
+import type { Product, ProductPayload, ProductType } from '../types/products.ts'
+import { getSession } from '../auth/session.ts'
+import { hasCapability } from '../auth/capabilities.ts'
 
 const emptyProduct: ProductPayload = {
   name: '',
   description: '',
   sku: '',
   price: 0,
+  type: 'part',
   stock: 0,
 }
 
+const productTypeLabels: Record<ProductType, string> = {
+  part: 'Repuesto',
+  service: 'Servicio',
+}
+
 export default function ProductsPage() {
+  const canManage = hasCapability(getSession()?.role, 'manage_products')
   const [products, setProducts] = useState<Product[]>([])
   const [status, setStatus] = useState<'idle' | 'loading' | 'error'>('loading')
   const [errorMessage, setErrorMessage] = useState('')
@@ -31,7 +40,8 @@ export default function ProductsPage() {
       description: state.description?.trim() || undefined,
       sku: state.sku.trim(),
       price: Number(state.price),
-      stock: state.stock !== undefined ? Number(state.stock) : undefined,
+      type: state.type ?? 'part',
+      stock: state.type === 'service' ? 0 : state.stock !== undefined ? Number(state.stock) : undefined,
     }),
     [],
   )
@@ -45,7 +55,8 @@ export default function ProductsPage() {
       description: selectedProduct.description ?? undefined,
       sku: selectedProduct.sku,
       price: selectedProduct.price,
-      stock: selectedProduct.stock ?? undefined,
+      type: selectedProduct.type ?? 'part',
+      stock: selectedProduct.type === 'service' ? 0 : selectedProduct.stock ?? undefined,
     }
   }, [selectedProduct])
 
@@ -67,6 +78,7 @@ export default function ProductsPage() {
         product.name.toLowerCase().includes(normalized) ||
         product.sku.toLowerCase().includes(normalized) ||
         (product.description ?? '').toLowerCase().includes(normalized)
+        || productTypeLabels[product.type ?? 'part'].toLowerCase().includes(normalized)
       )
     })
   }, [products, query])
@@ -98,6 +110,7 @@ export default function ProductsPage() {
       description: product.description ?? '',
       sku: product.sku,
       price: product.price,
+      type: product.type ?? 'part',
       stock: product.stock ?? 0,
     })
     setPanelOpen(true)
@@ -245,9 +258,9 @@ export default function ProductsPage() {
   return (
     <AdminLayout
       title="Productos"
-      subtitle="Productos (incluye servicios) disponibles para ordenes y ventas."
-      actionLabel="Nuevo producto"
-      onAction={openCreatePanel}
+      subtitle="Catalogo de repuestos con inventario y servicios sin control de stock."
+      actionLabel={canManage ? 'Nuevo producto' : undefined}
+      onAction={canManage ? openCreatePanel : undefined}
     >
       <div className="admin-toolbar">
         <label className="search-field">
@@ -282,9 +295,9 @@ export default function ProductsPage() {
       {status === 'idle' && filteredProducts.length === 0 && (
         <div className="state-card">
           <p>No hay productos activos registrados.</p>
-          <button className="btn btn-secondary" type="button" onClick={openCreatePanel}>
+          {canManage && <button className="btn btn-secondary" type="button" onClick={openCreatePanel}>
             Crear primer producto
-          </button>
+          </button>}
         </div>
       )}
 
@@ -294,10 +307,11 @@ export default function ProductsPage() {
             <thead>
               <tr>
                 <th>Producto</th>
+                <th>Tipo</th>
                 <th>SKU</th>
                 <th>Precio</th>
                 <th>Stock</th>
-                <th>Acciones</th>
+                {canManage && <th>Acciones</th>}
               </tr>
             </thead>
             <tbody>
@@ -307,10 +321,11 @@ export default function ProductsPage() {
                     <div className="cell-title">{product.name}</div>
                     <span className="cell-subtitle">{product.description || 'Sin descripcion'}</span>
                   </td>
+                  <td><span className="badge">{productTypeLabels[product.type ?? 'part']}</span></td>
                   <td>{product.sku}</td>
                   <td>${product.price.toLocaleString('es-CL')}</td>
-                  <td>{product.stock ?? 0}</td>
-                  <td>
+                  <td>{product.type === 'service' ? 'No aplica' : product.stock ?? 0}</td>
+                  {canManage && <td>
                     <div className="row-actions">
                       <button
                         className="btn btn-ghost btn-small"
@@ -327,7 +342,7 @@ export default function ProductsPage() {
                         Desactivar
                       </button>
                     </div>
-                  </td>
+                  </td>}
                 </tr>
               ))}
             </tbody>
@@ -335,7 +350,7 @@ export default function ProductsPage() {
         </div>
       )}
 
-      {panelOpen && (
+      {canManage && panelOpen && (
         <div className="modal-overlay" role="dialog" aria-modal="true" onClick={closePanel}>
           <div className="modal" onClick={(event) => event.stopPropagation()}>
             <div className="modal-header">
@@ -387,6 +402,23 @@ export default function ProductsPage() {
                 />
               </label>
               <label className="field">
+                <span>Tipo</span>
+                <select
+                  value={formState.type ?? 'part'}
+                  onChange={(event) =>
+                    setFormState((prev) => ({
+                      ...prev,
+                      type: event.target.value as ProductType,
+                      stock: event.target.value === 'service' ? 0 : prev.stock,
+                    }))
+                  }
+                >
+                  {Object.entries(productTypeLabels).map(([value, label]) => (
+                    <option key={value} value={value}>{label}</option>
+                  ))}
+                </select>
+              </label>
+              {formState.type !== 'service' && <label className="field">
                 <span>Stock</span>
                 <input
                   type="number"
@@ -396,7 +428,7 @@ export default function ProductsPage() {
                     setFormState((prev) => ({ ...prev, stock: Number(event.target.value) }))
                   }
                 />
-              </label>
+              </label>}
               <div className="form-actions field-full">
                 <button
                   className="btn btn-primary"

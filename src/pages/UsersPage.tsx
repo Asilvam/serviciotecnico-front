@@ -5,6 +5,8 @@ import { usersApi } from '../api/usersApi.ts'
 import { getProfileRequest } from '../auth/authApi.ts'
 import { getSession, setSessionRole } from '../auth/session.ts'
 import type { User, UserPayload, UserRole } from '../types/users.ts'
+import { techniciansApi } from '../api/techniciansApi.ts'
+import type { Technician } from '../types/technicians.ts'
 
 const emptyUser: UserPayload = {
   name: '',
@@ -22,6 +24,7 @@ const roleLabels: Record<UserRole, string> = {
 
 export default function UsersPage() {
   const [users, setUsers] = useState<User[]>([])
+  const [technicians, setTechnicians] = useState<Technician[]>([])
   const [status, setStatus] = useState<'idle' | 'loading' | 'error'>('loading')
   const [errorMessage, setErrorMessage] = useState('')
   const [query, setQuery] = useState('')
@@ -39,6 +42,7 @@ export default function UsersPage() {
       name: state.name.trim(),
       email: state.email.trim(),
       role: state.role ?? 'receptionist',
+      technicianId: state.role === 'technician' ? state.technicianId?.trim() || undefined : undefined,
       isActive: state.isActive ?? true,
       password: state.password?.trim() || undefined,
     }),
@@ -53,6 +57,7 @@ export default function UsersPage() {
       name: selectedUser.name,
       email: selectedUser.email,
       role: selectedUser.role ?? 'receptionist',
+      technicianId: selectedUser.technicianId ?? undefined,
       isActive: selectedUser.isActive ?? true,
       password: undefined,
     }
@@ -111,6 +116,7 @@ export default function UsersPage() {
       name: user.name,
       email: user.email,
       role: user.role ?? 'receptionist',
+      technicianId: user.technicianId ?? '',
       isActive: user.isActive ?? true,
       password: '',
     })
@@ -282,11 +288,15 @@ export default function UsersPage() {
       }
 
       try {
-        const data = await usersApi.list()
+        const [data, techniciansData] = await Promise.all([
+          usersApi.list(),
+          techniciansApi.list(),
+        ])
         if (cancelled) {
           return
         }
         setUsers(data)
+        setTechnicians(techniciansData)
         setStatus('idle')
       } catch (error) {
         if (cancelled) {
@@ -450,7 +460,11 @@ export default function UsersPage() {
                 <select
                   value={formState.role ?? 'receptionist'}
                   onChange={(event) =>
-                    setFormState((prev) => ({ ...prev, role: event.target.value as UserRole }))
+                    setFormState((prev) => ({
+                      ...prev,
+                      role: event.target.value as UserRole,
+                      technicianId: event.target.value === 'technician' ? prev.technicianId : '',
+                    }))
                   }
                 >
                   {Object.entries(roleLabels).map(([value, label]) => (
@@ -460,6 +474,28 @@ export default function UsersPage() {
                   ))}
                 </select>
               </label>
+              {formState.role === 'technician' && (
+                <label className="field">
+                  <span>Perfil tecnico vinculado</span>
+                  <select
+                    value={formState.technicianId ?? ''}
+                    onChange={(event) =>
+                      setFormState((prev) => ({ ...prev, technicianId: event.target.value }))
+                    }
+                    required
+                  >
+                    <option value="">Selecciona un tecnico activo</option>
+                    {technicians.map((technician) => {
+                      const technicianId = technician.id ?? technician._id ?? ''
+                      return (
+                        <option key={technicianId || technician.email} value={technicianId}>
+                          {technician.name} ({technician.email})
+                        </option>
+                      )
+                    })}
+                  </select>
+                </label>
+              )}
               <label className="field">
                 <span>{selectedUser ? 'Nueva contrasena' : 'Contrasena'}</span>
                 <input

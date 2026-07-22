@@ -20,7 +20,9 @@ export type ServiceOrder = {
   _id?: string
   orderNumber?: string
   customerId: string
-  technicianId?: string
+  customerName?: string
+  technicianId?: string | null
+  technicianName?: string
   deviceType: string
   deviceBrand: string
   deviceModel?: string
@@ -55,13 +57,19 @@ export type CreateServiceOrderPayload = {
 }
 
 export type UpdateServiceOrderPayload = {
-  technicianId?: string
-  diagnosis?: string
-  workDone?: string
+  customerId?: string
+  technicianId?: string | null
+  deviceType?: string
+  deviceBrand?: string
+  deviceModel?: string | null
+  serialNumber?: string | null
+  problemDescription?: string
+  diagnosis?: string | null
+  workDone?: string | null
   status?: ServiceOrderStatus
   priority?: ServiceOrderPriority
   laborCost?: number
-  estimatedDelivery?: string
+  estimatedDelivery?: string | null
   items?: ServiceOrderItem[]
 }
 
