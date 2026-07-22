@@ -15,4 +15,5 @@ export type CustomerPayload = {
   email: string
   phone?: string
   address?: string
+  isActive?: boolean
 }

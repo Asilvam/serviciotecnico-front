@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react'
 import Swal from 'sweetalert2'
 import AdminLayout from '../components/AdminLayout.tsx'
+import ActionIcon from '../components/ActionIcon.tsx'
 import { usersApi } from '../api/usersApi.ts'
 import { getProfileRequest } from '../auth/authApi.ts'
 import { getSession, setSessionRole } from '../auth/session.ts'
@@ -402,18 +403,22 @@ export default function UsersPage() {
                   <td>
                     <div className="row-actions">
                       <button
-                        className="btn btn-ghost btn-small"
+                        className="btn btn-ghost btn-small btn-icon"
                         type="button"
                         onClick={() => openEditPanel(user)}
+                        aria-label="Editar usuario"
+                        title="Editar"
                       >
-                        Editar
+                        <ActionIcon name="edit" />
                       </button>
                       <button
-                        className="btn btn-secondary btn-small"
+                        className="btn btn-secondary btn-small btn-icon"
                         type="button"
                         onClick={() => handleDelete(user)}
+                        aria-label="Desactivar usuario"
+                        title="Desactivar"
                       >
-                        Desactivar
+                        <ActionIcon name="disable" />
                       </button>
                     </div>
                   </td>

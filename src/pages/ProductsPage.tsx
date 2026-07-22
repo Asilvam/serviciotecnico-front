@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react'
 import Swal from 'sweetalert2'
 import AdminLayout from '../components/AdminLayout.tsx'
+import ActionIcon from '../components/ActionIcon.tsx'
 import { productsApi } from '../api/productsApi.ts'
 import type { Product, ProductPayload, ProductType } from '../types/products.ts'
 import { getSession } from '../auth/session.ts'
@@ -328,18 +329,22 @@ export default function ProductsPage() {
                   {canManage && <td>
                     <div className="row-actions">
                       <button
-                        className="btn btn-ghost btn-small"
+                        className="btn btn-ghost btn-small btn-icon"
                         type="button"
                         onClick={() => openEditPanel(product)}
+                        aria-label="Editar producto"
+                        title="Editar"
                       >
-                        Editar
+                        <ActionIcon name="edit" />
                       </button>
                       <button
-                        className="btn btn-secondary btn-small"
+                        className="btn btn-secondary btn-small btn-icon"
                         type="button"
                         onClick={() => handleDelete(product)}
+                        aria-label="Desactivar producto"
+                        title="Desactivar"
                       >
-                        Desactivar
+                        <ActionIcon name="disable" />
                       </button>
                     </div>
                   </td>}

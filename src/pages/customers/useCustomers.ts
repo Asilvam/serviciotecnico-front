@@ -25,8 +25,8 @@ export const emptyCustomer: CustomerPayload = {
  * 
  * @returns Un objeto estructurado con estados, callbacks de eventos y métodos de control.
  */
-export function useCustomers() {
-  /** Lista completa de clientes activos obtenidos de la API. */
+export function useCustomers(canChangeStatus = false) {
+  /** Lista de clientes visibles para el rol actual obtenidos de la API. */
   const [customers, setCustomers] = useState<Customer[]>([])
   /** Estado actual de la carga de datos (`idle`, `loading`, `error`). */
   const [status, setStatus] = useState<'idle' | 'loading' | 'error'>('loading')
@@ -60,8 +60,11 @@ export function useCustomers() {
       email: state.email.trim(),
       phone: state.phone?.trim() || undefined,
       address: state.address?.trim() || undefined,
+      ...(canChangeStatus && state.isActive !== undefined
+        ? { isActive: state.isActive }
+        : {}),
     }),
-    [],
+    [canChangeStatus],
   )
 
   /**
@@ -76,8 +79,11 @@ export function useCustomers() {
       email: selectedCustomer.email,
       phone: selectedCustomer.phone ?? undefined,
       address: selectedCustomer.address ?? undefined,
+      ...(canChangeStatus
+        ? { isActive: selectedCustomer.isActive !== false }
+        : {}),
     }
-  }, [selectedCustomer])
+  }, [canChangeStatus, selectedCustomer])
 
   /**
    * Compara los datos actuales del formulario con los originales del registro.
@@ -110,7 +116,7 @@ export function useCustomers() {
   }, [customers, query])
 
   /**
-   * Realiza la llamada asíncrona a la API para cargar o refrescar el listado de clientes activos.
+   * Realiza la llamada asíncrona a la API para cargar o refrescar el listado de clientes.
    */
   const loadCustomers = useCallback(async () => {
     setStatus('loading')
@@ -146,9 +152,10 @@ export function useCustomers() {
       email: customer.email,
       phone: customer.phone ?? '',
       address: customer.address ?? '',
+      ...(canChangeStatus ? { isActive: customer.isActive !== false } : {}),
     })
     setPanelOpen(true)
-  }, [])
+  }, [canChangeStatus])
 
   /**
    * Cierra el modal y restablece todos los valores del formulario a su estado vacío por defecto.
@@ -211,28 +218,7 @@ export function useCustomers() {
     }
   }
 
-  /**
-   * Solicita confirmación y ejecuta la desactivación lógica de un cliente en el backend.
-   * Remueve el cliente desactivado de la lista reactiva local al confirmar la operación.
-   * 
-   * @param customer Datos del cliente a desactivar.
-   */
-  const handleDelete = async (customer: Customer) => {
-    const result = await Swal.fire({
-      icon: 'warning',
-      title: 'Desactivar cliente',
-      text: `Se desactivara a ${customer.name}.`,
-      showCancelButton: true,
-      confirmButtonText: 'Si, desactivar',
-      cancelButtonText: 'Cancelar',
-      confirmButtonColor: '#e67e22',
-      cancelButtonColor: '#7f8c8d',
-    })
-
-    if (!result.isConfirmed) {
-      return
-    }
-
+  const handlePermanentDelete = async (customer: Customer) => {
     const customerId = resolveCustomerId(customer)
     if (!customerId) {
       void Swal.fire({
@@ -244,17 +230,35 @@ export function useCustomers() {
       return
     }
 
+    const result = await Swal.fire({
+      icon: 'error',
+      title: 'Eliminar cliente definitivamente',
+      text: `Se eliminara definitivamente a ${customer.name}. Solo sera posible si no tiene ordenes asociadas. Esta accion no se puede deshacer.`,
+      showCancelButton: true,
+      confirmButtonText: 'Si, eliminar definitivamente',
+      cancelButtonText: 'Conservar cliente',
+      confirmButtonColor: '#e74c3c',
+      cancelButtonColor: '#7f8c8d',
+      focusCancel: true,
+    })
+
+    if (!result.isConfirmed) {
+      return
+    }
+
     try {
-      await customersApi.remove(customerId)
-      setCustomers((prev) => prev.filter((item) => resolveCustomerId(item) !== customerId))
+      await customersApi.deletePermanent(customerId)
+      setCustomers((prev) =>
+        prev.filter((item) => resolveCustomerId(item) !== customerId),
+      )
       void Swal.fire({
         icon: 'success',
-        title: 'Cliente desactivado',
-        text: 'El cliente ya no aparece en la lista activa.',
+        title: 'Cliente eliminado',
+        text: 'El cliente fue eliminado definitivamente y la accion quedo registrada.',
         confirmButtonColor: '#2c5f7c',
       })
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'No fue posible desactivar el cliente.'
+      const message = error instanceof Error ? error.message : 'No fue posible eliminar al cliente.'
       void Swal.fire({
         icon: 'error',
         title: 'Operacion fallida',
@@ -313,6 +317,6 @@ export function useCustomers() {
     openEditPanel,
     closePanel,
     handleSubmit,
-    handleDelete,
+    handlePermanentDelete,
   }
 }

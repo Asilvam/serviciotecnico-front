@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, type ComponentProps } from 'react'
 import Swal from 'sweetalert2'
 import AdminLayout from '../components/AdminLayout.tsx'
+import ActionIcon from '../components/ActionIcon.tsx'
 import { customersApi } from '../api/customersApi.ts'
 import { productsApi } from '../api/productsApi.ts'
 import { serviceOrdersApi } from '../api/serviceOrdersApi.ts'
@@ -59,17 +60,15 @@ const emptyOrder: ServiceOrderFormState = {
   items: [],
 }
 
-const deviceTypeSuggestions = [
-  'Celular',
-  'Tablet',
-  'Notebook',
-  'Mac',
-  'Computador de escritorio',
-  'Monitor',
-  'Televisor',
-  'Consola',
-  'Otro equipo electronico',
-]
+const trimText = (value?: string | null): string => value?.trim() ?? ''
+
+const normalizeDeviceType = (value?: string | null): string =>
+  trimText(value)
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toUpperCase()
+
+const isValidDeviceType = (value: string): boolean => /^[A-Z0-9]+$/.test(value)
 
 const escapeHtml = (value: string): string =>
   value.replace(
@@ -111,6 +110,7 @@ export default function ServiceOrdersPage() {
   const [query, setQuery] = useState('')
   const [panelOpen, setPanelOpen] = useState(false)
   const [formState, setFormState] = useState<ServiceOrderFormState>(emptyOrder)
+  const [deviceTypeError, setDeviceTypeError] = useState('')
   const [selectedOrder, setSelectedOrder] = useState<ServiceOrder | null>(null)
   const isEditing = Boolean(selectedOrder)
   const [isSaving, setIsSaving] = useState(false)
@@ -188,8 +188,12 @@ export default function ServiceOrdersPage() {
   }, [products])
 
   const resolveCustomerName = useCallback(
-    (customerId: string, customerName?: string) =>
-      customersById[customerId]?.name || customerName || `Cliente desconocido (ID: ${customerId})`,
+    (customerId?: string, customerName?: string) => {
+      if (customerId) {
+        return customersById[customerId]?.name || customerName || `Cliente desconocido (ID: ${customerId})`
+      }
+      return customerName || 'Cliente no disponible'
+    },
     [customersById],
   )
 
@@ -365,26 +369,26 @@ export default function ServiceOrdersPage() {
       const orderStatus = order.status ?? 'pending'
 
       if (isAdmin || (isReceptionist && orderStatus === 'pending')) {
-        payload.customerId = state.customerId.trim()
-        payload.deviceType = state.deviceType.trim()
-        payload.deviceBrand = state.deviceBrand.trim()
-        payload.deviceModel = state.deviceModel?.trim() || null
-        payload.serialNumber = state.serialNumber?.trim() || null
-        payload.problemDescription = state.problemDescription.trim()
+        payload.customerId = trimText(state.customerId)
+        payload.deviceType = normalizeDeviceType(state.deviceType)
+        payload.deviceBrand = trimText(state.deviceBrand)
+        payload.deviceModel = trimText(state.deviceModel) || null
+        payload.serialNumber = trimText(state.serialNumber) || null
+        payload.problemDescription = trimText(state.problemDescription)
       }
 
       if (
         isAdmin ||
         (isReceptionist && ['pending', 'in_progress', 'waiting_parts'].includes(orderStatus))
       ) {
-        payload.technicianId = state.technicianId?.trim() || null
+        payload.technicianId = trimText(state.technicianId) || null
         payload.priority = state.priority ?? 'medium'
-        payload.estimatedDelivery = state.estimatedDelivery?.trim() || null
+        payload.estimatedDelivery = trimText(state.estimatedDelivery) || null
       }
 
       if (isAdmin || isTechnician) {
-        payload.diagnosis = state.diagnosis?.trim() || null
-        payload.workDone = state.workDone?.trim() || null
+        payload.diagnosis = trimText(state.diagnosis) || null
+        payload.workDone = trimText(state.workDone) || null
         payload.items = sanitizeItems(state.items)
       }
 
@@ -409,13 +413,13 @@ export default function ServiceOrdersPage() {
       return null
     }
     const initialState: ServiceOrderFormState = {
-      customerId: selectedOrder.customerId,
+      customerId: selectedOrder.customerId ?? '',
       technicianId: selectedOrder.technicianId ?? undefined,
-      deviceType: selectedOrder.deviceType,
-      deviceBrand: selectedOrder.deviceBrand,
+      deviceType: selectedOrder.deviceType ?? '',
+      deviceBrand: selectedOrder.deviceBrand ?? '',
       deviceModel: selectedOrder.deviceModel ?? undefined,
       serialNumber: selectedOrder.serialNumber ?? undefined,
-      problemDescription: selectedOrder.problemDescription,
+      problemDescription: selectedOrder.problemDescription ?? '',
       diagnosis: selectedOrder.diagnosis ?? undefined,
       workDone: selectedOrder.workDone ?? undefined,
       status: selectedOrder.status ?? 'pending',
@@ -438,7 +442,7 @@ export default function ServiceOrdersPage() {
   const customerOptions = useMemo(
     () =>
       buildDynamicOptions({
-        items: customers,
+        items: customers.filter((customer) => customer.isActive !== false),
         currentId: formState.customerId,
         resolveId: resolveCustomerId,
         resolveLabel: (customer) => customer.name,
@@ -453,17 +457,32 @@ export default function ServiceOrdersPage() {
   const technicianOptions = useMemo(
     () =>
       buildDynamicOptions({
-        items: technicians,
+        items: technicians.filter((technician) => technician.isActive !== false),
         currentId: formState.technicianId,
         resolveId: resolveTechnicianId,
         resolveLabel: (technician) => technician.name,
-        unknownLabel: (id) =>
-          selectedOrder?.technicianId === id && selectedOrder.technicianName
+        unknownLabel: (id) => {
+          const inactiveTechnician = techniciansById[id]
+          if (inactiveTechnician?.isActive === false) {
+            return `${inactiveTechnician.name} (No disponible)`
+          }
+          return selectedOrder?.technicianId === id && selectedOrder.technicianName
             ? selectedOrder.technicianName
-            : `Tecnico desconocido (ID: ${id})`,
+            : `Tecnico desconocido (ID: ${id})`
+        },
       }),
-    [technicians, formState.technicianId, selectedOrder],
+    [technicians, techniciansById, formState.technicianId, selectedOrder],
   )
+
+  const deviceTypeSuggestions = useMemo(() => {
+    const normalizedTypes = orders
+      .map((order) => normalizeDeviceType(order.deviceType ?? ''))
+      .filter((deviceType) => isValidDeviceType(deviceType))
+
+    return Array.from(new Set(normalizedTypes)).sort((a, b) =>
+      a.localeCompare(b, 'es'),
+    )
+  }, [orders])
 
   const filteredOrders = useMemo(() => {
     const normalized = query.trim().toLowerCase()
@@ -525,19 +544,20 @@ export default function ServiceOrdersPage() {
   const openCreatePanel = () => {
     setSelectedOrder(null)
     setFormState({ ...emptyOrder, items: [] })
+    setDeviceTypeError('')
     setPanelOpen(true)
   }
 
   const openEditPanel = (order: ServiceOrder) => {
     setSelectedOrder(order)
     setFormState({
-      customerId: order.customerId,
+      customerId: order.customerId ?? '',
       technicianId: order.technicianId ?? '',
-      deviceType: order.deviceType,
-      deviceBrand: order.deviceBrand,
+      deviceType: order.deviceType ?? '',
+      deviceBrand: order.deviceBrand ?? '',
       deviceModel: order.deviceModel ?? '',
       serialNumber: order.serialNumber ?? '',
-      problemDescription: order.problemDescription,
+      problemDescription: order.problemDescription ?? '',
       status: order.status ?? 'pending',
       priority: order.priority ?? 'medium',
       diagnosis: order.diagnosis ?? '',
@@ -546,6 +566,7 @@ export default function ServiceOrdersPage() {
       estimatedDelivery: order.estimatedDelivery ?? '',
       items: order.items ?? [],
     })
+    setDeviceTypeError('')
     setPanelOpen(true)
   }
 
@@ -553,6 +574,7 @@ export default function ServiceOrdersPage() {
     setPanelOpen(false)
     setSelectedOrder(null)
     setFormState(emptyOrder)
+    setDeviceTypeError('')
   }, [])
 
   useEffect(() => {
@@ -570,6 +592,20 @@ export default function ServiceOrdersPage() {
 
   const handleSubmit: ComponentProps<'form'>['onSubmit'] = async (event) => {
     event.preventDefault()
+    const normalizedDeviceType = normalizeDeviceType(formState.deviceType)
+    if (!isValidDeviceType(normalizedDeviceType)) {
+      setDeviceTypeError('Ingresa solo una palabra en categoria (sin espacios ni simbolos).')
+      void Swal.fire({
+        icon: 'warning',
+        title: 'Categoria invalida',
+        text: 'Ingresa solo una palabra para la categoria del equipo. Ejemplos: CELULAR, NOTEBOOK, MAC.',
+        confirmButtonColor: '#2c5f7c',
+      })
+      return
+    }
+
+    setDeviceTypeError('')
+    setFormState((prev) => ({ ...prev, deviceType: normalizedDeviceType }))
     setIsSaving(true)
 
     try {
@@ -612,7 +648,9 @@ export default function ServiceOrdersPage() {
         const payload = selectChangedFields(currentPayload, initialUpdatePayload ?? {})
         const updated = await serviceOrdersApi.update(orderId, payload)
         setOrders((prev) =>
-          prev.map((item) => (resolveOrderId(item) === resolveOrderId(updated) ? updated : item)),
+          prev.map((item) =>
+            resolveOrderId(item) === orderId ? { ...item, ...updated } : item,
+          ),
         )
         await Swal.fire({
           icon: 'success',
@@ -622,15 +660,15 @@ export default function ServiceOrdersPage() {
         })
       } else {
         const payload: CreateServiceOrderPayload = {
-          customerId: formState.customerId.trim(),
-          technicianId: formState.technicianId?.trim() || undefined,
-          deviceType: formState.deviceType.trim(),
-          deviceBrand: formState.deviceBrand.trim(),
-          deviceModel: formState.deviceModel?.trim() || undefined,
-          serialNumber: formState.serialNumber?.trim() || undefined,
-          problemDescription: formState.problemDescription.trim(),
+          customerId: trimText(formState.customerId),
+          technicianId: trimText(formState.technicianId) || undefined,
+          deviceType: normalizedDeviceType,
+          deviceBrand: trimText(formState.deviceBrand),
+          deviceModel: trimText(formState.deviceModel) || undefined,
+          serialNumber: trimText(formState.serialNumber) || undefined,
+          problemDescription: trimText(formState.problemDescription),
           priority: formState.priority ?? 'medium',
-          estimatedDelivery: formState.estimatedDelivery?.trim() || undefined,
+          estimatedDelivery: trimText(formState.estimatedDelivery) || undefined,
           ...(isAdmin ? { items: sanitizeItems(formState.items) } : {}),
         }
         const created = await serviceOrdersApi.create(payload)
@@ -734,7 +772,7 @@ export default function ServiceOrdersPage() {
     }
   }
 
-  const handleDelete = async (order: ServiceOrder) => {
+  const handleCancel = async (order: ServiceOrder) => {
     const result = await Swal.fire({
       icon: 'warning',
       title: 'Cancelar orden',
@@ -762,8 +800,14 @@ export default function ServiceOrdersPage() {
     }
 
     try {
-      await serviceOrdersApi.remove(orderId)
-      setOrders((prev) => prev.filter((item) => resolveOrderId(item) !== orderId))
+      const cancelledOrder = await serviceOrdersApi.cancel(orderId)
+      setOrders((prev) =>
+        prev.map((item) =>
+          resolveOrderId(item) === orderId
+            ? { ...item, ...cancelledOrder }
+            : item,
+        ),
+      )
       void Swal.fire({
         icon: 'success',
         title: 'Orden cancelada',
@@ -772,6 +816,54 @@ export default function ServiceOrdersPage() {
       })
     } catch (error) {
       const message = error instanceof Error ? error.message : 'No fue posible cancelar la orden.'
+      void Swal.fire({
+        icon: 'error',
+        title: 'Operacion fallida',
+        text: message,
+        confirmButtonColor: '#2c5f7c',
+      })
+    }
+  }
+
+  const handlePermanentDelete = async (order: ServiceOrder) => {
+    const orderId = resolveOrderId(order)
+    if (!orderId) {
+      void Swal.fire({
+        icon: 'error',
+        title: 'Operacion fallida',
+        text: 'No fue posible identificar la orden.',
+        confirmButtonColor: '#2c5f7c',
+      })
+      return
+    }
+
+    const result = await Swal.fire({
+      icon: 'error',
+      title: 'Eliminar orden definitivamente',
+      html: `La orden <strong>${escapeHtml(order.orderNumber ?? orderId)}</strong> sera borrada fisicamente.<br><br>Esta accion no se puede deshacer. El evento y los datos principales quedaran registrados en auditoria.`,
+      showCancelButton: true,
+      confirmButtonText: 'Si, eliminar definitivamente',
+      cancelButtonText: 'Conservar orden',
+      confirmButtonColor: '#e74c3c',
+      cancelButtonColor: '#7f8c8d',
+      focusCancel: true,
+    })
+
+    if (!result.isConfirmed) {
+      return
+    }
+
+    try {
+      await serviceOrdersApi.deletePermanent(orderId)
+      setOrders((prev) => prev.filter((item) => resolveOrderId(item) !== orderId))
+      void Swal.fire({
+        icon: 'success',
+        title: 'Orden eliminada',
+        text: 'La orden fue eliminada definitivamente y la accion quedo registrada.',
+        confirmButtonColor: '#2c5f7c',
+      })
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'No fue posible eliminar la orden.'
       void Swal.fire({
         icon: 'error',
         title: 'Operacion fallida',
@@ -895,7 +987,11 @@ export default function ServiceOrdersPage() {
                     <span className="cell-subtitle">{order.deviceBrand}</span>
                   </td>
                   <td className="col-status">
-                    <span className="badge">{statusLabels[order.status ?? 'pending']}</span>
+                    <span
+                      className={`badge ${order.status === 'cancelled' ? 'badge-cancelled' : ''}`}
+                    >
+                      {statusLabels[order.status ?? 'pending']}
+                    </span>
                   </td>
                   <td>{priorityLabels[order.priority ?? 'medium']}</td>
                   <td>${(order.totalCost ?? 0).toLocaleString('es-CL')}</td>
@@ -909,7 +1005,7 @@ export default function ServiceOrdersPage() {
                           aria-label="Ver orden"
                           title="Ver"
                         >
-                          👁️
+                          <ActionIcon name="view" />
                         </button>
                       ) : (
                         <button
@@ -919,7 +1015,7 @@ export default function ServiceOrdersPage() {
                           aria-label="Editar orden"
                           title="Editar"
                         >
-                          ✏️
+                          <ActionIcon name="edit" />
                         </button>
                       )}
                       <button
@@ -929,17 +1025,31 @@ export default function ServiceOrdersPage() {
                         aria-label="Imprimir orden"
                         title="Imprimir ticket"
                       >
-                        🖨️
+                        <ActionIcon name="print" />
                       </button>
-                      {canCancel && !['delivered', 'cancelled'].includes(order.status ?? 'pending') && <button
-                        className="btn btn-secondary btn-small btn-icon"
-                        type="button"
-                        onClick={() => handleDelete(order)}
-                        aria-label="Cancelar orden"
-                        title="Cancelar"
-                      >
-                        🚫
-                      </button>}
+                      {canCancel &&
+                        !['delivered', 'cancelled'].includes(order.status ?? 'pending') && (
+                          <button
+                            className="btn btn-secondary btn-small btn-icon"
+                            type="button"
+                            onClick={() => handleCancel(order)}
+                            aria-label="Cancelar orden"
+                            title="Cancelar"
+                          >
+                            <ActionIcon name="disable" />
+                          </button>
+                        )}
+                      {isAdmin && (
+                        <button
+                          className="btn btn-danger btn-small btn-icon"
+                          type="button"
+                          onClick={() => handlePermanentDelete(order)}
+                          aria-label="Eliminar orden definitivamente"
+                          title="Eliminar definitivamente"
+                        >
+                          <ActionIcon name="delete" />
+                        </button>
+                      )}
                     </div>
                   </td>
                 </tr>
@@ -1007,13 +1117,26 @@ export default function ServiceOrdersPage() {
                         type="text"
                         list="device-type-suggestions"
                         value={formState.deviceType}
-                        onChange={(event) =>
+                        onChange={(event) => {
                           setFormState((prev) => ({ ...prev, deviceType: event.target.value }))
-                        }
+                          if (deviceTypeError) {
+                            setDeviceTypeError('')
+                          }
+                        }}
+                        onBlur={() => {
+                          const normalizedValue = normalizeDeviceType(formState.deviceType)
+                          setFormState((prev) => ({ ...prev, deviceType: normalizedValue }))
+                          if (!isValidDeviceType(normalizedValue)) {
+                            setDeviceTypeError('Ingresa solo una palabra en categoria (sin espacios ni simbolos).')
+                            return
+                          }
+                          setDeviceTypeError('')
+                        }}
                         placeholder="Ej. Celular, notebook, monitor"
                         required
                         disabled={!canEditIntake}
                       />
+                      {deviceTypeError && <small className="field-error">{deviceTypeError}</small>}
                       <datalist id="device-type-suggestions">
                         {deviceTypeSuggestions.map((deviceType) => (
                           <option key={deviceType} value={deviceType} />
@@ -1232,7 +1355,7 @@ export default function ServiceOrdersPage() {
                                       title="Eliminar"
                                       disabled={!canEditTechnical}
                                     >
-                                      🗑
+                                      <ActionIcon name="delete" />
                                     </button>
                                   </td>
                                 </tr>

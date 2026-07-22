@@ -1,22 +1,20 @@
 import type { Customer } from '../../types/customers.ts'
+import ActionIcon from '../../components/ActionIcon.tsx'
 
 /**
  * Propiedades requeridas para el componente {@link CustomerTable}.
  */
 type CustomerTableProps = {
-  /** Listado de clientes activos a renderizar en la tabla. */
+  /** Listado de clientes visibles para el rol actual. */
   customers: Customer[]
   /**
    * Callback invocado cuando el usuario hace clic en el botón de edición de un cliente.
    * @param customer Objeto de datos del cliente seleccionado para editar.
    */
   onEdit: (customer: Customer) => void
-  /**
-   * Callback invocado cuando el usuario hace clic en el botón de desactivación de un cliente.
-   * @param customer Objeto de datos del cliente seleccionado para desactivar.
-   */
-  onDelete: (customer: Customer) => void
-  canDeactivate: boolean
+  /** Elimina físicamente un cliente sin órdenes asociadas. */
+  onPermanentDelete: (customer: Customer) => void
+  canDeletePermanently: boolean
   /**
    * Función de utilidad para resolver de forma segura el identificador único del cliente.
    * Resuelve diferencias de esquema (ej. `id` vs `_id`).
@@ -40,7 +38,8 @@ type CustomerTableProps = {
  * <CustomerTable
  *   customers={filteredCustomers}
  *   onEdit={openEditPanel}
- *   onDelete={handleDelete}
+ *   onPermanentDelete={handlePermanentDelete}
+ *   canDeletePermanently={canDeletePermanently}
  *   resolveCustomerId={resolveCustomerId}
  * />
  * ```
@@ -48,8 +47,8 @@ type CustomerTableProps = {
 export default function CustomerTable({
   customers,
   onEdit,
-  onDelete,
-  canDeactivate,
+  onPermanentDelete,
+  canDeletePermanently,
   resolveCustomerId,
 }: CustomerTableProps) {
   return (
@@ -60,6 +59,7 @@ export default function CustomerTable({
             <th>Cliente</th>
             <th>Contacto</th>
             <th>Direccion</th>
+            <th>Estado</th>
             <th>Acciones</th>
           </tr>
         </thead>
@@ -73,21 +73,34 @@ export default function CustomerTable({
               <td>{customer.phone || 'Sin telefono'}</td>
               <td>{customer.address || 'Sin direccion'}</td>
               <td>
+                <span
+                  className={`status-badge ${customer.isActive === false ? 'is-inactive' : 'is-active'}`}
+                >
+                  {customer.isActive === false ? 'No disponible' : 'Disponible'}
+                </span>
+              </td>
+              <td>
                 <div className="row-actions">
-                  {canDeactivate && <button
-                    className="btn btn-ghost btn-small"
+                  <button
+                    className="btn btn-ghost btn-small btn-icon"
                     type="button"
                     onClick={() => onEdit(customer)}
+                    aria-label="Editar cliente"
+                    title="Editar"
                   >
-                    Editar
-                  </button>}
-                  <button
-                    className="btn btn-secondary btn-small"
-                    type="button"
-                    onClick={() => onDelete(customer)}
-                  >
-                    Desactivar
+                    <ActionIcon name="edit" />
                   </button>
+                  {canDeletePermanently && (
+                    <button
+                      className="btn btn-danger btn-small btn-icon"
+                      type="button"
+                      onClick={() => onPermanentDelete(customer)}
+                      aria-label="Borrar cliente definitivamente"
+                      title="Borrar definitivamente"
+                    >
+                      <ActionIcon name="delete" />
+                    </button>
+                  )}
                 </div>
               </td>
             </tr>

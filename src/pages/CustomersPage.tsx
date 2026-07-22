@@ -27,8 +27,8 @@ export default function CustomersPage() {
     openEditPanel,
     closePanel,
     handleSubmit,
-    handleDelete,
-  } = useCustomers()
+    handlePermanentDelete,
+  } = useCustomers(canDeactivate)
 
   return (
     <AdminLayout
@@ -69,7 +69,7 @@ export default function CustomersPage() {
 
       {status === 'idle' && filteredCustomers.length === 0 && (
         <div className="state-card">
-          <p>No hay clientes activos registrados.</p>
+          <p>No hay clientes registrados.</p>
           <button className="btn btn-secondary" type="button" onClick={openCreatePanel}>
             Crear primer cliente
           </button>
@@ -80,8 +80,8 @@ export default function CustomersPage() {
         <CustomerTable
           customers={filteredCustomers}
           onEdit={openEditPanel}
-          onDelete={handleDelete}
-          canDeactivate={canDeactivate}
+          onPermanentDelete={handlePermanentDelete}
+          canDeletePermanently={canDeactivate}
           resolveCustomerId={resolveCustomerId}
         />
       )}
@@ -94,6 +94,7 @@ export default function CustomersPage() {
           isSaving={isSaving}
           isEditing={isEditing}
           isDirty={isDirty}
+          canChangeStatus={canDeactivate}
           onSubmit={handleSubmit}
           onClose={closePanel}
         />

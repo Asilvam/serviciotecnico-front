@@ -18,6 +18,8 @@ type CustomerFormProps = {
   isEditing: boolean
   /** Bandera booleana que determina si el formulario ha sufrido modificaciones respecto a los valores iniciales. */
   isDirty: boolean
+  /** Permite cambiar disponibilidad; reservado para administración. */
+  canChangeStatus: boolean
   /**
    * Callback invocado al enviar el formulario válido.
    * @param event Evento del envío del formulario.
@@ -58,6 +60,7 @@ export default function CustomerForm({
   isSaving,
   isEditing,
   isDirty,
+  canChangeStatus,
   onSubmit,
   onClose,
 }: CustomerFormProps) {
@@ -140,6 +143,23 @@ export default function CustomerForm({
               onChange={(event) => setFormState((prev) => ({ ...prev, address: event.target.value }))}
             />
           </label>
+          {isEditing && canChangeStatus && (
+            <label className="field">
+              <span>Estado</span>
+              <select
+                value={formState.isActive === false ? 'inactive' : 'active'}
+                onChange={(event) =>
+                  setFormState((prev) => ({
+                    ...prev,
+                    isActive: event.target.value === 'active',
+                  }))
+                }
+              >
+                <option value="active">Disponible</option>
+                <option value="inactive">No disponible</option>
+              </select>
+            </label>
+          )}
           <div className="form-actions field-full">
             <button
               className="btn btn-primary"
