@@ -12,6 +12,9 @@ export const customersApi = {
     return apiClient.patch<Customer>(`/customers/${id}`, payload)
   },
   remove(id: string) {
-    return apiClient.delete<void>(`/customers/${id}`)
+    return apiClient.delete<Customer>(`/customers/${id}`)
+  },
+  deletePermanent(id: string) {
+    return apiClient.delete<void>(`/customers/${id}/permanent`)
   },
 }

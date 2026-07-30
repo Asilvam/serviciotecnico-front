@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, type ComponentProps } from 'react'
 import Swal from 'sweetalert2'
 import AdminLayout from '../components/AdminLayout.tsx'
+import ActionIcon from '../components/ActionIcon.tsx'
 import { customersApi } from '../api/customersApi.ts'
 import { productsApi } from '../api/productsApi.ts'
 import { serviceOrdersApi } from '../api/serviceOrdersApi.ts'
@@ -16,6 +17,8 @@ import type { Customer } from '../types/customers.ts'
 import type { Product } from '../types/products.ts'
 import type { Technician } from '../types/technicians.ts'
 import { buildDynamicOptions } from '../utils/dynamicOptions.ts'
+import { getSession } from '../auth/session.ts'
+import { hasCapability } from '../auth/capabilities.ts'
 
 const statusLabels: Record<ServiceOrderStatus, string> = {
   pending: 'Pendiente',
@@ -57,16 +60,47 @@ const emptyOrder: ServiceOrderFormState = {
   items: [],
 }
 
-const getTomorrowDateString = (): string => {
-  const tomorrow = new Date()
-  tomorrow.setDate(tomorrow.getDate() + 1)
-  const year = tomorrow.getFullYear()
-  const month = String(tomorrow.getMonth() + 1).padStart(2, '0')
-  const day = String(tomorrow.getDate()).padStart(2, '0')
-  return `${year}-${month}-${day}`
+const trimText = (value?: string | null): string => value?.trim() ?? ''
+
+const normalizeDeviceType = (value?: string | null): string =>
+  trimText(value)
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toUpperCase()
+
+const isValidDeviceType = (value: string): boolean => /^[A-Z0-9]+$/.test(value)
+
+const escapeHtml = (value: string): string =>
+  value.replace(
+    /[&<>"']/g,
+    (character) =>
+      ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' })[character] ??
+      character,
+  )
+
+const technicianStatusTransitions: Partial<Record<ServiceOrderStatus, ServiceOrderStatus[]>> = {
+  pending: ['in_progress'],
+  in_progress: ['waiting_parts', 'completed'],
+  waiting_parts: ['in_progress', 'completed'],
 }
 
+const selectChangedFields = (
+  current: UpdateServiceOrderPayload,
+  initial: UpdateServiceOrderPayload,
+): UpdateServiceOrderPayload =>
+  Object.fromEntries(
+    (Object.keys(current) as Array<keyof UpdateServiceOrderPayload>)
+      .filter((field) => JSON.stringify(current[field]) !== JSON.stringify(initial[field]))
+      .map((field) => [field, current[field]]),
+  ) as UpdateServiceOrderPayload
+
 export default function ServiceOrdersPage() {
+  const role = getSession()?.role
+  const isAdmin = role === 'admin'
+  const isReceptionist = role === 'receptionist'
+  const isTechnician = role === 'technician'
+  const canCreate = hasCapability(role, 'create_orders')
+  const canCancel = hasCapability(role, 'cancel_orders')
   const [orders, setOrders] = useState<ServiceOrder[]>([])
   const [customers, setCustomers] = useState<Customer[]>([])
   const [products, setProducts] = useState<Product[]>([])
@@ -76,14 +110,47 @@ export default function ServiceOrdersPage() {
   const [query, setQuery] = useState('')
   const [panelOpen, setPanelOpen] = useState(false)
   const [formState, setFormState] = useState<ServiceOrderFormState>(emptyOrder)
+  const [deviceTypeError, setDeviceTypeError] = useState('')
   const [selectedOrder, setSelectedOrder] = useState<ServiceOrder | null>(null)
   const isEditing = Boolean(selectedOrder)
   const [isSaving, setIsSaving] = useState(false)
 
-  const isReadOnly = useMemo(() => {
-    if (!selectedOrder) return false
-    return ['delivered', 'cancelled'].includes(selectedOrder.status ?? 'pending')
-  }, [selectedOrder])
+  const selectedStatus = selectedOrder?.status ?? 'pending'
+  const canEditIntake = !isEditing
+    ? canCreate
+    : isAdmin || (isReceptionist && selectedStatus === 'pending')
+  const canEditManagement = !isEditing
+    ? canCreate
+    : isAdmin ||
+      (isReceptionist && ['pending', 'in_progress', 'waiting_parts'].includes(selectedStatus))
+  const canEditTechnical =
+    isEditing && (isAdmin || (isTechnician && !['completed', 'delivered', 'cancelled'].includes(selectedStatus)))
+  const canEditLaborCost = isEditing && isAdmin
+  const canChangeStatus =
+    isEditing &&
+    (isAdmin ||
+      (isReceptionist && selectedStatus === 'completed') ||
+      (isTechnician && (technicianStatusTransitions[selectedStatus]?.length ?? 0) > 0))
+  const canSubmit = !isEditing
+    ? canCreate
+    : canEditIntake || canEditManagement || canEditTechnical || canEditLaborCost || canChangeStatus
+  const isReadOnly = isEditing && !canSubmit
+
+  const availableStatuses = useMemo(() => {
+    if (!selectedOrder) return []
+    if (isAdmin) {
+      return (Object.keys(statusLabels) as ServiceOrderStatus[]).filter(
+        (statusValue) => statusValue !== 'cancelled' || selectedStatus === 'cancelled',
+      )
+    }
+    if (isReceptionist && selectedStatus === 'completed') {
+      return ['completed', 'delivered'] as ServiceOrderStatus[]
+    }
+    if (isTechnician) {
+      return [selectedStatus, ...(technicianStatusTransitions[selectedStatus] ?? [])]
+    }
+    return [selectedStatus]
+  }, [isAdmin, isReceptionist, isTechnician, selectedOrder, selectedStatus])
 
   const resolveOrderId = (order: ServiceOrder) => order.id ?? order._id ?? ''
   const resolveCustomerId = (customer: Customer) => customer.id ?? customer._id ?? ''
@@ -121,14 +188,19 @@ export default function ServiceOrdersPage() {
   }, [products])
 
   const resolveCustomerName = useCallback(
-    (customerId: string) => customersById[customerId]?.name || `Cliente desconocido (ID: ${customerId})`,
+    (customerId?: string, customerName?: string) => {
+      if (customerId) {
+        return customersById[customerId]?.name || customerName || `Cliente desconocido (ID: ${customerId})`
+      }
+      return customerName || 'Cliente no disponible'
+    },
     [customersById],
   )
 
   const resolveTechnicianName = useCallback(
-    (technicianId?: string) =>
+    (technicianId?: string | null, technicianName?: string) =>
       technicianId
-        ? techniciansById[technicianId]?.name || `Tecnico desconocido (ID: ${technicianId})`
+        ? techniciansById[technicianId]?.name || technicianName || `Tecnico desconocido (ID: ${technicianId})`
         : 'Sin asignar',
     [techniciansById],
   )
@@ -160,8 +232,10 @@ export default function ServiceOrdersPage() {
     const options = products
       .map((product) => {
         const id = resolveProductId(product)
-        const label = `${product.name} (${product.sku}) - $${product.price.toLocaleString('es-CL')}`
-        return `<option value="${id}">${label}</option>`
+        const availability =
+          product.type === 'service' ? 'Servicio' : `Stock: ${product.stock ?? 0}`
+        const label = `${product.name} (${product.sku}) - ${availability} - $${product.price.toLocaleString('es-CL')}`
+        return `<option value="${escapeHtml(id)}">${escapeHtml(label)}</option>`
       })
       .join('')
 
@@ -290,28 +364,62 @@ export default function ServiceOrdersPage() {
   }
 
   const normalizeUpdatePayload = useCallback(
-    (state: ServiceOrderFormState) => ({
-      technicianId: state.technicianId?.trim() || undefined,
-      diagnosis: state.diagnosis?.trim() || undefined,
-      workDone: state.workDone?.trim() || undefined,
-      status: state.status ?? 'pending',
-      priority: state.priority ?? 'medium',
-      laborCost:
-        state.laborCost !== undefined && !Number.isNaN(state.laborCost)
-          ? Number(state.laborCost)
-          : undefined,
-      estimatedDelivery: state.estimatedDelivery?.trim() || undefined,
-      items: sanitizeItems(state.items),
-    }),
-    [],
+    (state: ServiceOrderFormState, order: ServiceOrder): UpdateServiceOrderPayload => {
+      const payload: UpdateServiceOrderPayload = {}
+      const orderStatus = order.status ?? 'pending'
+
+      if (isAdmin || (isReceptionist && orderStatus === 'pending')) {
+        payload.customerId = trimText(state.customerId)
+        payload.deviceType = normalizeDeviceType(state.deviceType)
+        payload.deviceBrand = trimText(state.deviceBrand)
+        payload.deviceModel = trimText(state.deviceModel) || null
+        payload.serialNumber = trimText(state.serialNumber) || null
+        payload.problemDescription = trimText(state.problemDescription)
+      }
+
+      if (
+        isAdmin ||
+        (isReceptionist && ['pending', 'in_progress', 'waiting_parts'].includes(orderStatus))
+      ) {
+        payload.technicianId = trimText(state.technicianId) || null
+        payload.priority = state.priority ?? 'medium'
+        payload.estimatedDelivery = trimText(state.estimatedDelivery) || null
+      }
+
+      if (isAdmin || isTechnician) {
+        payload.diagnosis = trimText(state.diagnosis) || null
+        payload.workDone = trimText(state.workDone) || null
+        payload.items = sanitizeItems(state.items)
+      }
+
+      if (isAdmin) {
+        payload.laborCost =
+          state.laborCost !== undefined && !Number.isNaN(state.laborCost)
+            ? Number(state.laborCost)
+            : undefined
+      }
+
+      if (state.status && state.status !== orderStatus) {
+        payload.status = state.status
+      }
+
+      return payload
+    },
+    [isAdmin, isReceptionist, isTechnician],
   )
 
   const initialUpdatePayload = useMemo(() => {
     if (!selectedOrder) {
       return null
     }
-    return {
+    const initialState: ServiceOrderFormState = {
+      customerId: selectedOrder.customerId ?? '',
       technicianId: selectedOrder.technicianId ?? undefined,
+      deviceType: selectedOrder.deviceType ?? '',
+      deviceBrand: selectedOrder.deviceBrand ?? '',
+      deviceModel: selectedOrder.deviceModel ?? undefined,
+      serialNumber: selectedOrder.serialNumber ?? undefined,
+      problemDescription: selectedOrder.problemDescription ?? '',
       diagnosis: selectedOrder.diagnosis ?? undefined,
       workDone: selectedOrder.workDone ?? undefined,
       status: selectedOrder.status ?? 'pending',
@@ -320,39 +428,61 @@ export default function ServiceOrdersPage() {
       estimatedDelivery: selectedOrder.estimatedDelivery ?? undefined,
       items: sanitizeItems(selectedOrder.items),
     }
-  }, [selectedOrder])
+    return normalizeUpdatePayload(initialState, selectedOrder)
+  }, [selectedOrder, normalizeUpdatePayload])
 
   const isUpdateDirty = useMemo(() => {
     if (!selectedOrder || !initialUpdatePayload) {
       return false
     }
-    const current = normalizeUpdatePayload(formState)
+    const current = normalizeUpdatePayload(formState, selectedOrder)
     return JSON.stringify(current) !== JSON.stringify(initialUpdatePayload)
   }, [selectedOrder, initialUpdatePayload, formState, normalizeUpdatePayload])
 
   const customerOptions = useMemo(
     () =>
       buildDynamicOptions({
-        items: customers,
+        items: customers.filter((customer) => customer.isActive !== false),
         currentId: formState.customerId,
         resolveId: resolveCustomerId,
         resolveLabel: (customer) => customer.name,
-        unknownLabel: (id) => `Cliente desconocido (ID: ${id})`,
+        unknownLabel: (id) =>
+          selectedOrder?.customerId === id && selectedOrder.customerName
+            ? selectedOrder.customerName
+            : `Cliente desconocido (ID: ${id})`,
       }),
-    [customers, formState.customerId],
+    [customers, formState.customerId, selectedOrder],
   )
 
   const technicianOptions = useMemo(
     () =>
       buildDynamicOptions({
-        items: technicians,
+        items: technicians.filter((technician) => technician.isActive !== false),
         currentId: formState.technicianId,
         resolveId: resolveTechnicianId,
         resolveLabel: (technician) => technician.name,
-        unknownLabel: (id) => `Tecnico desconocido (ID: ${id})`,
+        unknownLabel: (id) => {
+          const inactiveTechnician = techniciansById[id]
+          if (inactiveTechnician?.isActive === false) {
+            return `${inactiveTechnician.name} (No disponible)`
+          }
+          return selectedOrder?.technicianId === id && selectedOrder.technicianName
+            ? selectedOrder.technicianName
+            : `Tecnico desconocido (ID: ${id})`
+        },
       }),
-    [technicians, formState.technicianId],
+    [technicians, techniciansById, formState.technicianId, selectedOrder],
   )
+
+  const deviceTypeSuggestions = useMemo(() => {
+    const normalizedTypes = orders
+      .map((order) => normalizeDeviceType(order.deviceType ?? ''))
+      .filter((deviceType) => isValidDeviceType(deviceType))
+
+    return Array.from(new Set(normalizedTypes)).sort((a, b) =>
+      a.localeCompare(b, 'es'),
+    )
+  }, [orders])
 
   const filteredOrders = useMemo(() => {
     const normalized = query.trim().toLowerCase()
@@ -362,8 +492,8 @@ export default function ServiceOrdersPage() {
     return orders.filter((order) => {
       const statusLabel = statusLabels[order.status ?? 'pending'].toLowerCase()
       const priorityLabel = priorityLabels[order.priority ?? 'medium'].toLowerCase()
-      const customerName = resolveCustomerName(order.customerId).toLowerCase()
-      const technicianName = resolveTechnicianName(order.technicianId).toLowerCase()
+      const customerName = resolveCustomerName(order.customerId, order.customerName).toLowerCase()
+      const technicianName = resolveTechnicianName(order.technicianId, order.technicianName).toLowerCase()
       return (
         (order.orderNumber ?? '').toLowerCase().includes(normalized) ||
         order.customerId.toLowerCase().includes(normalized) ||
@@ -388,16 +518,20 @@ export default function ServiceOrdersPage() {
     setStatus('loading')
     setErrorMessage('')
     try {
-      const [data, customersData, techniciansData, productsData] = await Promise.all([
+      const [data, productsData] = await Promise.all([
         serviceOrdersApi.list(),
-        customersApi.list(),
-        techniciansApi.list(),
         productsApi.list(),
       ])
       setOrders(data)
-      setCustomers(customersData)
-      setTechnicians(techniciansData)
       setProducts(productsData)
+      if (!isTechnician) {
+        const [customersData, techniciansData] = await Promise.all([
+          customersApi.list(),
+          techniciansApi.list(),
+        ])
+        setCustomers(customersData)
+        setTechnicians(techniciansData)
+      }
       setStatus('idle')
     } catch (error) {
       const message =
@@ -405,27 +539,25 @@ export default function ServiceOrdersPage() {
       setErrorMessage(message)
       setStatus('error')
     }
-  }, [])
+  }, [isTechnician])
 
   const openCreatePanel = () => {
     setSelectedOrder(null)
-    setFormState({
-      ...emptyOrder,
-      estimatedDelivery: getTomorrowDateString(),
-    })
+    setFormState({ ...emptyOrder, items: [] })
+    setDeviceTypeError('')
     setPanelOpen(true)
   }
 
   const openEditPanel = (order: ServiceOrder) => {
     setSelectedOrder(order)
     setFormState({
-      customerId: order.customerId,
+      customerId: order.customerId ?? '',
       technicianId: order.technicianId ?? '',
-      deviceType: order.deviceType,
-      deviceBrand: order.deviceBrand,
+      deviceType: order.deviceType ?? '',
+      deviceBrand: order.deviceBrand ?? '',
       deviceModel: order.deviceModel ?? '',
       serialNumber: order.serialNumber ?? '',
-      problemDescription: order.problemDescription,
+      problemDescription: order.problemDescription ?? '',
       status: order.status ?? 'pending',
       priority: order.priority ?? 'medium',
       diagnosis: order.diagnosis ?? '',
@@ -434,6 +566,7 @@ export default function ServiceOrdersPage() {
       estimatedDelivery: order.estimatedDelivery ?? '',
       items: order.items ?? [],
     })
+    setDeviceTypeError('')
     setPanelOpen(true)
   }
 
@@ -441,6 +574,7 @@ export default function ServiceOrdersPage() {
     setPanelOpen(false)
     setSelectedOrder(null)
     setFormState(emptyOrder)
+    setDeviceTypeError('')
   }, [])
 
   useEffect(() => {
@@ -458,6 +592,20 @@ export default function ServiceOrdersPage() {
 
   const handleSubmit: ComponentProps<'form'>['onSubmit'] = async (event) => {
     event.preventDefault()
+    const normalizedDeviceType = normalizeDeviceType(formState.deviceType)
+    if (!isValidDeviceType(normalizedDeviceType)) {
+      setDeviceTypeError('Ingresa solo una palabra en categoria (sin espacios ni simbolos).')
+      void Swal.fire({
+        icon: 'warning',
+        title: 'Categoria invalida',
+        text: 'Ingresa solo una palabra para la categoria del equipo. Ejemplos: CELULAR, NOTEBOOK, MAC.',
+        confirmButtonColor: '#2c5f7c',
+      })
+      return
+    }
+
+    setDeviceTypeError('')
+    setFormState((prev) => ({ ...prev, deviceType: normalizedDeviceType }))
     setIsSaving(true)
 
     try {
@@ -496,10 +644,13 @@ export default function ServiceOrdersPage() {
             return
           }
 
-        const payload: UpdateServiceOrderPayload = normalizeUpdatePayload(formState)
+        const currentPayload = normalizeUpdatePayload(formState, selectedOrder)
+        const payload = selectChangedFields(currentPayload, initialUpdatePayload ?? {})
         const updated = await serviceOrdersApi.update(orderId, payload)
         setOrders((prev) =>
-          prev.map((item) => (resolveOrderId(item) === resolveOrderId(updated) ? updated : item)),
+          prev.map((item) =>
+            resolveOrderId(item) === orderId ? { ...item, ...updated } : item,
+          ),
         )
         await Swal.fire({
           icon: 'success',
@@ -509,16 +660,16 @@ export default function ServiceOrdersPage() {
         })
       } else {
         const payload: CreateServiceOrderPayload = {
-          customerId: formState.customerId.trim(),
-          technicianId: formState.technicianId?.trim() || undefined,
-          deviceType: formState.deviceType.trim(),
-          deviceBrand: formState.deviceBrand.trim(),
-          deviceModel: formState.deviceModel?.trim() || undefined,
-          serialNumber: formState.serialNumber?.trim() || undefined,
-          problemDescription: formState.problemDescription.trim(),
+          customerId: trimText(formState.customerId),
+          technicianId: trimText(formState.technicianId) || undefined,
+          deviceType: normalizedDeviceType,
+          deviceBrand: trimText(formState.deviceBrand),
+          deviceModel: trimText(formState.deviceModel) || undefined,
+          serialNumber: trimText(formState.serialNumber) || undefined,
+          problemDescription: trimText(formState.problemDescription),
           priority: formState.priority ?? 'medium',
-          estimatedDelivery: formState.estimatedDelivery?.trim() || undefined,
-          items: sanitizeItems(formState.items),
+          estimatedDelivery: trimText(formState.estimatedDelivery) || undefined,
+          ...(isAdmin ? { items: sanitizeItems(formState.items) } : {}),
         }
         const created = await serviceOrdersApi.create(payload)
         setOrders((prev) => [created.order, ...prev])
@@ -621,13 +772,13 @@ export default function ServiceOrdersPage() {
     }
   }
 
-  const handleDelete = async (order: ServiceOrder) => {
+  const handleCancel = async (order: ServiceOrder) => {
     const result = await Swal.fire({
       icon: 'warning',
-      title: 'Desactivar orden',
-      text: `Se desactivara la orden ${order.orderNumber ?? ''}.`,
+      title: 'Cancelar orden',
+      text: `Se cancelara la orden ${order.orderNumber ?? ''} y se devolveran sus repuestos al stock.`,
       showCancelButton: true,
-      confirmButtonText: 'Si, desactivar',
+      confirmButtonText: 'Si, cancelar',
       cancelButtonText: 'Cancelar',
       confirmButtonColor: '#e67e22',
       cancelButtonColor: '#7f8c8d',
@@ -649,16 +800,70 @@ export default function ServiceOrdersPage() {
     }
 
     try {
-      await serviceOrdersApi.remove(orderId)
-      setOrders((prev) => prev.filter((item) => resolveOrderId(item) !== orderId))
+      const cancelledOrder = await serviceOrdersApi.cancel(orderId)
+      setOrders((prev) =>
+        prev.map((item) =>
+          resolveOrderId(item) === orderId
+            ? { ...item, ...cancelledOrder }
+            : item,
+        ),
+      )
       void Swal.fire({
         icon: 'success',
-        title: 'Orden desactivada',
-        text: 'La orden ya no aparece en la lista activa.',
+        title: 'Orden cancelada',
+        text: 'La orden fue cancelada y el stock asociado fue restaurado.',
         confirmButtonColor: '#2c5f7c',
       })
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'No fue posible desactivar la orden.'
+      const message = error instanceof Error ? error.message : 'No fue posible cancelar la orden.'
+      void Swal.fire({
+        icon: 'error',
+        title: 'Operacion fallida',
+        text: message,
+        confirmButtonColor: '#2c5f7c',
+      })
+    }
+  }
+
+  const handlePermanentDelete = async (order: ServiceOrder) => {
+    const orderId = resolveOrderId(order)
+    if (!orderId) {
+      void Swal.fire({
+        icon: 'error',
+        title: 'Operacion fallida',
+        text: 'No fue posible identificar la orden.',
+        confirmButtonColor: '#2c5f7c',
+      })
+      return
+    }
+
+    const result = await Swal.fire({
+      icon: 'error',
+      title: 'Eliminar orden definitivamente',
+      html: `La orden <strong>${escapeHtml(order.orderNumber ?? orderId)}</strong> sera borrada fisicamente.<br><br>Esta accion no se puede deshacer. El evento y los datos principales quedaran registrados en auditoria.`,
+      showCancelButton: true,
+      confirmButtonText: 'Si, eliminar definitivamente',
+      cancelButtonText: 'Conservar orden',
+      confirmButtonColor: '#e74c3c',
+      cancelButtonColor: '#7f8c8d',
+      focusCancel: true,
+    })
+
+    if (!result.isConfirmed) {
+      return
+    }
+
+    try {
+      await serviceOrdersApi.deletePermanent(orderId)
+      setOrders((prev) => prev.filter((item) => resolveOrderId(item) !== orderId))
+      void Swal.fire({
+        icon: 'success',
+        title: 'Orden eliminada',
+        text: 'La orden fue eliminada definitivamente y la accion quedo registrada.',
+        confirmButtonColor: '#2c5f7c',
+      })
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'No fue posible eliminar la orden.'
       void Swal.fire({
         icon: 'error',
         title: 'Operacion fallida',
@@ -673,24 +878,23 @@ export default function ServiceOrdersPage() {
 
     const loadInitialOrders = async () => {
       try {
-        const [data, customersData, techniciansData, productsData] = await Promise.all([
+        const [data, productsData] = await Promise.all([
           serviceOrdersApi.list(),
-          customersApi.list(),
-          techniciansApi.list(),
           productsApi.list(),
         ])
-        if (cancelled) {
-          return
-        }
+        const directoryData = isTechnician
+          ? null
+          : await Promise.all([customersApi.list(), techniciansApi.list()])
+        if (cancelled) return
         setOrders(data)
-        setCustomers(customersData)
-        setTechnicians(techniciansData)
         setProducts(productsData)
+        if (directoryData) {
+          setCustomers(directoryData[0])
+          setTechnicians(directoryData[1])
+        }
         setStatus('idle')
       } catch (error) {
-        if (cancelled) {
-          return
-        }
+        if (cancelled) return
         const message =
           error instanceof Error ? error.message : 'No fue posible cargar las ordenes de servicio.'
         setErrorMessage(message)
@@ -699,18 +903,21 @@ export default function ServiceOrdersPage() {
     }
 
     void loadInitialOrders()
-
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [isTechnician])
 
   return (
     <AdminLayout
-      title="Ordenes de servicio"
-      subtitle="Administra el ciclo de atencion, prioridad y estado de cada orden."
-      actionLabel="Nueva orden"
-      onAction={openCreatePanel}
+      title={isTechnician ? 'Mis ordenes de servicio' : 'Ordenes de servicio'}
+      subtitle={
+        isTechnician
+          ? 'Consulta y actualiza el trabajo tecnico de las ordenes que tienes asignadas.'
+          : 'Administra el ciclo de atencion, prioridad y estado de cada orden.'
+      }
+      actionLabel={canCreate ? 'Nueva orden' : undefined}
+      onAction={canCreate ? openCreatePanel : undefined}
     >
       <div className="admin-toolbar">
         <label className="search-field">
@@ -744,10 +951,10 @@ export default function ServiceOrdersPage() {
 
       {status === 'idle' && filteredOrders.length === 0 && (
         <div className="state-card">
-          <p>No hay ordenes de servicio activas.</p>
-          <button className="btn btn-secondary" type="button" onClick={openCreatePanel}>
+          <p>{isTechnician ? 'No tienes ordenes asignadas.' : 'No hay ordenes de servicio activas.'}</p>
+          {canCreate && <button className="btn btn-secondary" type="button" onClick={openCreatePanel}>
             Crear primera orden
-          </button>
+          </button>}
         </div>
       )}
 
@@ -772,7 +979,7 @@ export default function ServiceOrdersPage() {
                   <td>
                     <div className="cell-title">{order.orderNumber || 'Sin folio'}</div>
                     <span className="cell-subtitle">
-                      {resolveCustomerName(order.customerId)}
+                      {resolveCustomerName(order.customerId, order.customerName)}
                     </span>
                   </td>
                   <td>
@@ -780,7 +987,11 @@ export default function ServiceOrdersPage() {
                     <span className="cell-subtitle">{order.deviceBrand}</span>
                   </td>
                   <td className="col-status">
-                    <span className="badge">{statusLabels[order.status ?? 'pending']}</span>
+                    <span
+                      className={`badge ${order.status === 'cancelled' ? 'badge-cancelled' : ''}`}
+                    >
+                      {statusLabels[order.status ?? 'pending']}
+                    </span>
                   </td>
                   <td>{priorityLabels[order.priority ?? 'medium']}</td>
                   <td>${(order.totalCost ?? 0).toLocaleString('es-CL')}</td>
@@ -794,7 +1005,7 @@ export default function ServiceOrdersPage() {
                           aria-label="Ver orden"
                           title="Ver"
                         >
-                          👁️
+                          <ActionIcon name="view" />
                         </button>
                       ) : (
                         <button
@@ -804,7 +1015,7 @@ export default function ServiceOrdersPage() {
                           aria-label="Editar orden"
                           title="Editar"
                         >
-                          ✏️
+                          <ActionIcon name="edit" />
                         </button>
                       )}
                       <button
@@ -814,17 +1025,31 @@ export default function ServiceOrdersPage() {
                         aria-label="Imprimir orden"
                         title="Imprimir ticket"
                       >
-                        🖨️
+                        <ActionIcon name="print" />
                       </button>
-                      <button
-                        className="btn btn-secondary btn-small btn-icon"
-                        type="button"
-                        onClick={() => handleDelete(order)}
-                        aria-label="Desactivar orden"
-                        title="Desactivar"
-                      >
-                        🚫
-                      </button>
+                      {canCancel &&
+                        !['delivered', 'cancelled'].includes(order.status ?? 'pending') && (
+                          <button
+                            className="btn btn-secondary btn-small btn-icon"
+                            type="button"
+                            onClick={() => handleCancel(order)}
+                            aria-label="Cancelar orden"
+                            title="Cancelar"
+                          >
+                            <ActionIcon name="disable" />
+                          </button>
+                        )}
+                      {isAdmin && (
+                        <button
+                          className="btn btn-danger btn-small btn-icon"
+                          type="button"
+                          onClick={() => handlePermanentDelete(order)}
+                          aria-label="Eliminar orden definitivamente"
+                          title="Eliminar definitivamente"
+                        >
+                          <ActionIcon name="delete" />
+                        </button>
+                      )}
                     </div>
                   </td>
                 </tr>
@@ -837,293 +1062,370 @@ export default function ServiceOrdersPage() {
       {panelOpen && (
         <div className="modal-overlay" role="dialog" aria-modal="true" onClick={closePanel}>
           <div className="modal modal-lg" onClick={(event) => event.stopPropagation()}>
-              <div className="modal-header">
-                <div>
-                  <h2>{isReadOnly ? 'Ver orden' : selectedOrder ? 'Editar orden' : 'Nueva orden'}</h2>
-                  <p>
-                    {isReadOnly
-                      ? 'Esta orden esta finalizada y no puede ser modificada.'
-                      : 'Completa la informacion requerida para guardar.'}
-                  </p>
-                </div>
+            <div className="modal-header">
+              <div>
+                <h2>
+                  {isReadOnly
+                    ? 'Detalle de la orden'
+                    : isEditing
+                      ? 'Seguimiento de la orden'
+                      : 'Ingreso de equipo'}
+                </h2>
+                <p>
+                  {isReadOnly
+                    ? 'Esta orden esta finalizada y se muestra en modo de consulta.'
+                    : isEditing
+                      ? 'Actualiza el avance tecnico, los repuestos, los servicios y los costos.'
+                      : 'Registra al cliente, el equipo recibido y la falla informada.'}
+                </p>
+              </div>
               <button className="btn btn-secondary" type="button" onClick={closePanel}>
                 Cerrar
               </button>
             </div>
             <form className="modal-form-wrapper" onSubmit={handleSubmit}>
               <div className="modal-scroll-area">
-                <div className="form-grid">
-              <label className="field">
-                <span>Cliente</span>
-                <select
-                   value={formState.customerId}
-                   onChange={(event) =>
-                     setFormState((prev) => ({ ...prev, customerId: event.target.value }))
-                   }
-                   required
-                   disabled={isEditing || isReadOnly}
-                >
-                  <option value="">Selecciona un cliente</option>
-                  {customerOptions.map((customer) => (
-                    <option key={customer.id} value={customer.id}>
-                      {customer.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="field">
-                <span>Tipo de equipo</span>
-                <input
-                  type="text"
-                  value={formState.deviceType}
-                  onChange={(event) =>
-                    setFormState((prev) => ({ ...prev, deviceType: event.target.value }))
-                  }
-                  required
-                  disabled={isReadOnly}
-                />
-              </label>
-              <label className="field field-full">
-                <span>Marca del equipo</span>
-                <input
-                  type="text"
-                  value={formState.deviceBrand}
-                  onChange={(event) =>
-                    setFormState((prev) => ({ ...prev, deviceBrand: event.target.value }))
-                  }
-                  required
-                  disabled={isReadOnly}
-                />
-              </label>
-              <label className="field">
-                <span>Modelo</span>
-                <input
-                  type="text"
-                  value={formState.deviceModel ?? ''}
-                  onChange={(event) =>
-                    setFormState((prev) => ({ ...prev, deviceModel: event.target.value }))
-                  }
-                  disabled={isReadOnly}
-                />
-              </label>
-              <label className="field">
-                <span>Numero de serie</span>
-                <input
-                  type="text"
-                  value={formState.serialNumber ?? ''}
-                  onChange={(event) =>
-                    setFormState((prev) => ({ ...prev, serialNumber: event.target.value }))
-                  }
-                  disabled={isReadOnly}
-                />
-              </label>
-              <label className="field field-full">
-                <span>Problema reportado</span>
-                <input
-                  type="text"
-                  value={formState.problemDescription}
-                  onChange={(event) =>
-                    setFormState((prev) => ({ ...prev, problemDescription: event.target.value }))
-                  }
-                  required
-                  disabled={isReadOnly}
-                />
-              </label>
-              <label className="field">
-                <span>Estado</span>
-                <select
-                  value={formState.status ?? 'pending'}
-                  onChange={(event) =>
-                    setFormState((prev) => ({ ...prev, status: event.target.value as ServiceOrderStatus }))
-                  }
-                  disabled={isReadOnly}
-                >
-                  {Object.entries(statusLabels).map(([value, label]) => (
-                    <option key={value} value={value}>
-                      {label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="field">
-                <span>Prioridad</span>
-                <select
-                  value={formState.priority ?? 'medium'}
-                  onChange={(event) =>
-                    setFormState((prev) => ({ ...prev, priority: event.target.value as ServiceOrderPriority }))
-                  }
-                  disabled={isReadOnly}
-                >
-                  {Object.entries(priorityLabels).map(([value, label]) => (
-                    <option key={value} value={value}>
-                      {label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="field">
-                <span>Tecnico asignado</span>
-                <select
-                  value={formState.technicianId ?? ''}
-                  onChange={(event) =>
-                    setFormState((prev) => ({ ...prev, technicianId: event.target.value }))
-                  }
-                  disabled={isReadOnly}
-                >
-                  <option value="">Sin asignar</option>
-                  {technicianOptions.map((technician) => (
-                    <option key={technician.id} value={technician.id}>
-                      {technician.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="field">
-                <span>Fecha estimada</span>
-                <input
-                  type="date"
-                  value={formState.estimatedDelivery ?? ''}
-                  onChange={(event) =>
-                    setFormState((prev) => ({ ...prev, estimatedDelivery: event.target.value }))
-                  }
-                  disabled={isReadOnly}
-                />
-              </label>
-              <div className="table-card field-full">
-                <div className="admin-toolbar items-toolbar">
-                  <div className="row-actions">
-                    <button
-                      className="btn btn-secondary btn-small"
-                      type="button"
-                      onClick={addItemRow}
-                      disabled={isReadOnly}
-                    >
-                      Agregar item
-                    </button>
+                <fieldset className="form-section">
+                  <legend>Datos de recepcion</legend>
+                  <p className="form-section-help">
+                    {isEditing
+                      ? 'Estos datos corresponden al ingreso original del equipo.'
+                      : 'Identifica al cliente y describe el equipo que queda en el servicio tecnico.'}
+                  </p>
+                  <div className="form-grid">
+                    <label className="field">
+                      <span>Cliente</span>
+                      <select
+                        value={formState.customerId}
+                        onChange={(event) =>
+                          setFormState((prev) => ({ ...prev, customerId: event.target.value }))
+                        }
+                        required
+                        disabled={!canEditIntake}
+                      >
+                        <option value="">Selecciona un cliente</option>
+                        {customerOptions.map((customer) => (
+                          <option key={customer.id} value={customer.id}>
+                            {customer.label}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="field">
+                      <span>Categoria o tipo de equipo</span>
+                      <input
+                        type="text"
+                        list="device-type-suggestions"
+                        value={formState.deviceType}
+                        onChange={(event) => {
+                          setFormState((prev) => ({ ...prev, deviceType: event.target.value }))
+                          if (deviceTypeError) {
+                            setDeviceTypeError('')
+                          }
+                        }}
+                        onBlur={() => {
+                          const normalizedValue = normalizeDeviceType(formState.deviceType)
+                          setFormState((prev) => ({ ...prev, deviceType: normalizedValue }))
+                          if (!isValidDeviceType(normalizedValue)) {
+                            setDeviceTypeError('Ingresa solo una palabra en categoria (sin espacios ni simbolos).')
+                            return
+                          }
+                          setDeviceTypeError('')
+                        }}
+                        placeholder="Ej. Celular, notebook, monitor"
+                        required
+                        disabled={!canEditIntake}
+                      />
+                      {deviceTypeError && <small className="field-error">{deviceTypeError}</small>}
+                      <datalist id="device-type-suggestions">
+                        {deviceTypeSuggestions.map((deviceType) => (
+                          <option key={deviceType} value={deviceType} />
+                        ))}
+                      </datalist>
+                    </label>
+                    <label className="field">
+                      <span>Marca</span>
+                      <input
+                        type="text"
+                        value={formState.deviceBrand}
+                        onChange={(event) =>
+                          setFormState((prev) => ({ ...prev, deviceBrand: event.target.value }))
+                        }
+                        required
+                        disabled={!canEditIntake}
+                      />
+                    </label>
+                    <label className="field">
+                      <span>Modelo</span>
+                      <input
+                        type="text"
+                        value={formState.deviceModel ?? ''}
+                        onChange={(event) =>
+                          setFormState((prev) => ({ ...prev, deviceModel: event.target.value }))
+                        }
+                        disabled={!canEditIntake}
+                      />
+                    </label>
+                    <label className="field field-full">
+                      <span>Numero de serie o IMEI</span>
+                      <input
+                        type="text"
+                        value={formState.serialNumber ?? ''}
+                        onChange={(event) =>
+                          setFormState((prev) => ({ ...prev, serialNumber: event.target.value }))
+                        }
+                        placeholder="Segun corresponda al equipo"
+                        disabled={!canEditIntake}
+                      />
+                    </label>
+                    <label className="field field-full">
+                      <span>Falla informada por el cliente</span>
+                      <textarea
+                        rows={3}
+                        value={formState.problemDescription}
+                        onChange={(event) =>
+                          setFormState((prev) => ({ ...prev, problemDescription: event.target.value }))
+                        }
+                        required
+                        disabled={!canEditIntake}
+                      />
+                    </label>
                   </div>
-                </div>
-                <table className="items-table">
-                  <thead>
-                    <tr>
-                      <th>Producto</th>
-                      <th>Cantidad</th>
-                      <th>Precio Unit.</th>
-                      <th>Subtotal</th>
-                      <th className="items-actions">Acciones</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {(formState.items ?? []).length === 0 && (
-                      <tr>
-                        <td colSpan={5}>Sin items asociados.</td>
-                      </tr>
+                </fieldset>
+
+                <fieldset className="form-section">
+                  <legend>{isEditing ? 'Gestion de la orden' : 'Gestion inicial'}</legend>
+                  <p className="form-section-help">
+                    {isEditing
+                      ? 'Administra responsable, prioridad, avance y fecha comprometida.'
+                      : 'La asignacion y la fecha son opcionales y pueden definirse mas adelante.'}
+                  </p>
+                  <div className="form-grid">
+                    {isEditing && (
+                      <label className="field">
+                        <span>Estado</span>
+                        <select
+                          value={formState.status ?? 'pending'}
+                          onChange={(event) =>
+                            setFormState((prev) => ({
+                              ...prev,
+                              status: event.target.value as ServiceOrderStatus,
+                            }))
+                          }
+                          disabled={!canChangeStatus}
+                        >
+                          {availableStatuses.map((statusValue) => (
+                            <option key={statusValue} value={statusValue}>
+                              {statusLabels[statusValue]}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
                     )}
-                    {(formState.items ?? []).map((item, index) => {
-                      const quantity = item.quantity ?? 1
-                      const unitPrice = Number.isFinite(item.unitPrice) ? item.unitPrice : 0
-                      const subtotal = unitPrice * quantity
-                      return (
-                        <tr key={`${item.productId}-${index}`}>
-                          <td>{item.productName}</td>
-                          <td>{quantity}</td>
-                          <td>{formatCurrency(unitPrice)}</td>
-                          <td>{formatCurrency(subtotal)}</td>
-                          <td className="items-actions">
+                    <label className="field">
+                      <span>Prioridad</span>
+                      <select
+                        value={formState.priority ?? 'medium'}
+                        onChange={(event) =>
+                          setFormState((prev) => ({
+                            ...prev,
+                            priority: event.target.value as ServiceOrderPriority,
+                          }))
+                        }
+                        disabled={!canEditManagement}
+                      >
+                        {Object.entries(priorityLabels).map(([value, label]) => (
+                          <option key={value} value={value}>
+                            {label}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="field">
+                      <span>Tecnico asignado</span>
+                      <select
+                        value={formState.technicianId ?? ''}
+                        onChange={(event) =>
+                          setFormState((prev) => ({ ...prev, technicianId: event.target.value }))
+                        }
+                        disabled={!canEditManagement}
+                      >
+                        <option value="">Sin asignar</option>
+                        {technicianOptions.map((technician) => (
+                          <option key={technician.id} value={technician.id}>
+                            {technician.label}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="field">
+                      <span>Fecha estimada</span>
+                      <input
+                        type="date"
+                        value={formState.estimatedDelivery ?? ''}
+                        onChange={(event) =>
+                          setFormState((prev) => ({
+                            ...prev,
+                            estimatedDelivery: event.target.value,
+                          }))
+                        }
+                        disabled={!canEditManagement}
+                      />
+                    </label>
+                  </div>
+                </fieldset>
+
+                {isEditing && (
+                  <fieldset className="form-section">
+                    <legend>Trabajo tecnico y costos</legend>
+                    <p className="form-section-help">
+                      Registra el diagnostico, el trabajo realizado y los items utilizados.
+                    </p>
+                    <div className="form-grid">
+                      <label className="field field-full">
+                        <span>Diagnostico</span>
+                        <textarea
+                          rows={3}
+                          value={formState.diagnosis ?? ''}
+                          onChange={(event) =>
+                            setFormState((prev) => ({ ...prev, diagnosis: event.target.value }))
+                          }
+                          disabled={!canEditTechnical}
+                        />
+                      </label>
+                      <label className="field field-full">
+                        <span>Trabajo realizado</span>
+                        <textarea
+                          rows={3}
+                          value={formState.workDone ?? ''}
+                          onChange={(event) =>
+                            setFormState((prev) => ({ ...prev, workDone: event.target.value }))
+                          }
+                          disabled={!canEditTechnical}
+                        />
+                      </label>
+                      <div className="table-card field-full">
+                        <div className="admin-toolbar items-toolbar">
+                          <strong>Repuestos y servicios</strong>
+                          <div className="row-actions">
                             <button
-                              className="btn btn-ghost btn-small btn-icon"
+                              className="btn btn-secondary btn-small"
                               type="button"
-                              onClick={() => removeItemRow(index)}
-                              aria-label="Eliminar item"
-                              title="Eliminar"
-                              disabled={isReadOnly}
+                              onClick={addItemRow}
+                              disabled={!canEditTechnical}
                             >
-                              🗑
+                              Agregar item
                             </button>
-                          </td>
-                        </tr>
-                      )
-                    })}
-                    {(formState.items ?? []).length > 0 && (
-                      <tr>
-                        <td colSpan={3}>Total items</td>
-                        <td>{formatCurrency(itemsTotal)}</td>
-                        <td></td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
+                          </div>
+                        </div>
+                        <table className="items-table">
+                          <thead>
+                            <tr>
+                              <th>Producto</th>
+                              <th>Cantidad</th>
+                              <th>Precio Unit.</th>
+                              <th>Subtotal</th>
+                              <th className="items-actions">Acciones</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {(formState.items ?? []).length === 0 && (
+                              <tr>
+                                <td colSpan={5}>Sin items asociados.</td>
+                              </tr>
+                            )}
+                            {(formState.items ?? []).map((item, index) => {
+                              const quantity = item.quantity ?? 1
+                              const unitPrice = Number.isFinite(item.unitPrice)
+                                ? item.unitPrice
+                                : 0
+                              const subtotal = unitPrice * quantity
+                              return (
+                                <tr key={`${item.productId}-${index}`}>
+                                  <td>{item.productName}</td>
+                                  <td>{quantity}</td>
+                                  <td>{formatCurrency(unitPrice)}</td>
+                                  <td>{formatCurrency(subtotal)}</td>
+                                  <td className="items-actions">
+                                    <button
+                                      className="btn btn-ghost btn-small btn-icon"
+                                      type="button"
+                                      onClick={() => removeItemRow(index)}
+                                      aria-label="Eliminar item"
+                                      title="Eliminar"
+                                      disabled={!canEditTechnical}
+                                    >
+                                      <ActionIcon name="delete" />
+                                    </button>
+                                  </td>
+                                </tr>
+                              )
+                            })}
+                            {(formState.items ?? []).length > 0 && (
+                              <tr>
+                                <td colSpan={3}>Total items</td>
+                                <td>{formatCurrency(itemsTotal)}</td>
+                                <td></td>
+                              </tr>
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+                      <label className="field">
+                        <span>Costo mano de obra</span>
+                        <input
+                          type="number"
+                          min="0"
+                          value={formState.laborCost ?? ''}
+                          onChange={(event) => {
+                            const value = event.target.value
+                            setFormState((prev) => ({
+                              ...prev,
+                              laborCost: value === '' ? undefined : Number(value),
+                            }))
+                          }}
+                          disabled={!canEditLaborCost}
+                        />
+                      </label>
+                    </div>
+                  </fieldset>
+                )}
               </div>
-              <label className="field">
-                <span>Costo mano de obra</span>
-                <input
-                  type="number"
-                  min="0"
-                  value={formState.laborCost ?? ''}
-                  onChange={(event) => {
-                    const value = event.target.value
-                    setFormState((prev) => ({
-                      ...prev,
-                      laborCost: value === '' ? undefined : Number(value),
-                    }))
-                  }}
-                  disabled={isReadOnly}
-                />
-              </label>
-              <label className="field field-full">
-                <span>Diagnostico</span>
-                <input
-                  type="text"
-                  value={formState.diagnosis ?? ''}
-                  onChange={(event) =>
-                    setFormState((prev) => ({ ...prev, diagnosis: event.target.value }))
-                  }
-                  disabled={isReadOnly}
-                />
-              </label>
-              <label className="field field-full">
-                <span>Trabajo realizado</span>
-                <input
-                  type="text"
-                  value={formState.workDone ?? ''}
-                  onChange={(event) =>
-                    setFormState((prev) => ({ ...prev, workDone: event.target.value }))
-                  }
-                  disabled={isReadOnly}
-                />
-              </label>
-            </div>
-          </div>
-          <div className="form-actions modal-footer-actions">
-            {isReadOnly ? null : (
-              <button
-                className="btn btn-primary"
-                type="submit"
-                aria-disabled={isEditing && !isUpdateDirty}
-                disabled={isSaving}
-                onClick={(event) => {
-                  if (isEditing && !isUpdateDirty) {
-                    event.preventDefault()
-                    void Swal.fire({
-                      toast: true,
-                      position: 'center',
-                      icon: 'info',
-                      title: 'No hay cambios para guardar.',
-                      showConfirmButton: false,
-                      timer: 2000,
-                      timerProgressBar: true,
-                    })
-                  }
-                }}
-              >
-                {isSaving && <span className="btn-spinner" aria-hidden="true" />}
-                {isSaving ? 'Guardando...' : selectedOrder ? 'Guardar cambios' : 'Crear orden'}
-              </button>
-            )}
-            <button className="btn btn-secondary" type="button" onClick={closePanel}>
-              Cancelar
-            </button>
-          </div>
-        </form>
+              <div className="form-actions modal-footer-actions">
+                {canSubmit ? (
+                  <button
+                    className="btn btn-primary"
+                    type="submit"
+                    aria-disabled={isEditing && !isUpdateDirty}
+                    disabled={isSaving}
+                    onClick={(event) => {
+                      if (isEditing && !isUpdateDirty) {
+                        event.preventDefault()
+                        void Swal.fire({
+                          toast: true,
+                          position: 'center',
+                          icon: 'info',
+                          title: 'No hay cambios para guardar.',
+                          showConfirmButton: false,
+                          timer: 2000,
+                          timerProgressBar: true,
+                        })
+                      }
+                    }}
+                  >
+                    {isSaving && <span className="btn-spinner" aria-hidden="true" />}
+                    {isSaving
+                      ? 'Guardando...'
+                      : isEditing
+                        ? 'Guardar seguimiento'
+                        : 'Registrar ingreso'}
+                  </button>
+                ) : null}
+                <button className="btn btn-secondary" type="button" onClick={closePanel}>
+                  {isReadOnly ? 'Cerrar' : 'Cancelar'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

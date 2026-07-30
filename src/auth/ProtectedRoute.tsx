@@ -1,15 +1,54 @@
-import type { ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { Navigate } from 'react-router-dom'
-import { getSessionStatus } from './session.ts'
+import {
+  clearSession,
+  getSession,
+  getSessionStatus,
+  setSessionRole,
+} from './session.ts'
+import type { AppRole } from './capabilities.ts'
+import { getProfileRequest } from './authApi.ts'
 
 type ProtectedRouteProps = {
   children: ReactNode
+  allowedRoles?: AppRole[]
 }
 
-export function ProtectedRoute({ children }: ProtectedRouteProps) {
+export function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) {
   const sessionStatus = getSessionStatus()
+  const session = getSession()
+  const [verifiedRole, setVerifiedRole] = useState<string | null>(null)
+  const [verificationFailed, setVerificationFailed] = useState(false)
 
-  if (sessionStatus !== 'valid') {
+  useEffect(() => {
+    let cancelled = false
+    if (sessionStatus !== 'valid' || !session?.token) {
+      return
+    }
+
+    const verifyCurrentRole = async () => {
+      try {
+        const profile = await getProfileRequest(session.token)
+        if (cancelled) return
+        if (!profile.role) {
+          throw new Error('El perfil no tiene un rol valido.')
+        }
+        setSessionRole(profile.role)
+        setVerifiedRole(profile.role)
+      } catch {
+        if (cancelled) return
+        clearSession()
+        setVerificationFailed(true)
+      }
+    }
+
+    void verifyCurrentRole()
+    return () => {
+      cancelled = true
+    }
+  }, [session?.token, sessionStatus])
+
+  if (sessionStatus !== 'valid' || verificationFailed) {
     return (
       <Navigate
         to="/"
@@ -19,7 +58,13 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
     )
   }
 
+  if (!verifiedRole) {
+    return <div className="route-loading">Validando permisos...</div>
+  }
+
+  if (allowedRoles && !allowedRoles.includes(verifiedRole as AppRole)) {
+    return <Navigate to="/dashboard" replace />
+  }
+
   return children
 }
-
-

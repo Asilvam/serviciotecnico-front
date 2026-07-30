@@ -1,8 +1,11 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react'
 import Swal from 'sweetalert2'
 import AdminLayout from '../components/AdminLayout.tsx'
+import ActionIcon from '../components/ActionIcon.tsx'
 import { techniciansApi } from '../api/techniciansApi.ts'
 import type { Technician, TechnicianPayload, TechnicianSpecialty } from '../types/technicians.ts'
+import { getSession } from '../auth/session.ts'
+import { hasCapability } from '../auth/capabilities.ts'
 
 const emptyTechnician: TechnicianPayload = {
   name: '',
@@ -19,6 +22,7 @@ const specialtyLabels: Record<TechnicianSpecialty, string> = {
 }
 
 export default function TechniciansPage() {
+  const canManage = hasCapability(getSession()?.role, 'manage_technicians')
   const [technicians, setTechnicians] = useState<Technician[]>([])
   const [status, setStatus] = useState<'idle' | 'loading' | 'error'>('loading')
   const [errorMessage, setErrorMessage] = useState('')
@@ -37,6 +41,7 @@ export default function TechniciansPage() {
       email: state.email.trim(),
       phone: state.phone?.trim() || undefined,
       specialty: state.specialty ?? 'general',
+      ...(state.isActive === undefined ? {} : { isActive: state.isActive }),
     }),
     [],
   )
@@ -50,6 +55,7 @@ export default function TechniciansPage() {
       email: selectedTechnician.email,
       phone: selectedTechnician.phone ?? undefined,
       specialty: selectedTechnician.specialty ?? 'general',
+      isActive: selectedTechnician.isActive !== false,
     }
   }, [selectedTechnician])
 
@@ -102,6 +108,7 @@ export default function TechniciansPage() {
       email: technician.email,
       phone: technician.phone ?? '',
       specialty: technician.specialty ?? 'general',
+      isActive: technician.isActive !== false,
     })
     setPanelOpen(true)
   }
@@ -138,7 +145,9 @@ export default function TechniciansPage() {
         }
         const updated = await techniciansApi.update(technicianId, payload)
         setTechnicians((prev) =>
-          prev.map((item) => (resolveTechnicianId(item) === resolveTechnicianId(updated) ? updated : item)),
+          prev.map((item) =>
+            resolveTechnicianId(item) === technicianId ? { ...item, ...updated } : item,
+          ),
         )
         await Swal.fire({
           icon: 'success',
@@ -170,15 +179,15 @@ export default function TechniciansPage() {
     }
   }
 
-  const handleDelete = async (technician: Technician) => {
+  const handleDeletePermanent = async (technician: Technician) => {
     const result = await Swal.fire({
       icon: 'warning',
-      title: 'Desactivar tecnico',
-      text: `Se desactivara a ${technician.name}.`,
+      title: 'Eliminar tecnico definitivamente',
+      text: `Se eliminara a ${technician.name}. Solo sera posible si no tiene ordenes asociadas.`,
       showCancelButton: true,
-      confirmButtonText: 'Si, desactivar',
+      confirmButtonText: 'Si, eliminar',
       cancelButtonText: 'Cancelar',
-      confirmButtonColor: '#e67e22',
+      confirmButtonColor: '#c0392b',
       cancelButtonColor: '#7f8c8d',
     })
 
@@ -198,16 +207,16 @@ export default function TechniciansPage() {
     }
 
     try {
-      await techniciansApi.remove(technicianId)
+      await techniciansApi.deletePermanent(technicianId)
       setTechnicians((prev) => prev.filter((item) => resolveTechnicianId(item) !== technicianId))
       void Swal.fire({
         icon: 'success',
-        title: 'Tecnico desactivado',
-        text: 'El tecnico ya no aparece en la lista activa.',
+        title: 'Tecnico eliminado',
+        text: 'El tecnico fue eliminado definitivamente.',
         confirmButtonColor: '#2c5f7c',
       })
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'No fue posible desactivar el tecnico.'
+      const message = error instanceof Error ? error.message : 'No fue posible eliminar el tecnico.'
       void Swal.fire({
         icon: 'error',
         title: 'Operacion fallida',
@@ -248,9 +257,9 @@ export default function TechniciansPage() {
   return (
     <AdminLayout
       title="Tecnicos"
-      subtitle="Administra el equipo tecnico y sus especialidades activas."
-      actionLabel="Nuevo tecnico"
-      onAction={openCreatePanel}
+      subtitle={canManage ? 'Administra el equipo tecnico, su disponibilidad y especialidades.' : 'Consulta el equipo tecnico disponible y sus especialidades.'}
+      actionLabel={canManage ? 'Nuevo tecnico' : undefined}
+      onAction={canManage ? openCreatePanel : undefined}
     >
       <div className="admin-toolbar">
         <label className="search-field">
@@ -284,10 +293,10 @@ export default function TechniciansPage() {
 
       {status === 'idle' && filteredTechnicians.length === 0 && (
         <div className="state-card">
-          <p>No hay tecnicos activos registrados.</p>
-          <button className="btn btn-secondary" type="button" onClick={openCreatePanel}>
+          <p>{canManage ? 'No hay tecnicos registrados.' : 'No hay tecnicos disponibles registrados.'}</p>
+          {canManage && <button className="btn btn-secondary" type="button" onClick={openCreatePanel}>
             Crear primer tecnico
-          </button>
+          </button>}
         </div>
       )}
 
@@ -299,7 +308,8 @@ export default function TechniciansPage() {
                 <th>Tecnico</th>
                 <th>Contacto</th>
                 <th>Especialidad</th>
-                <th>Acciones</th>
+                <th>Estado</th>
+                {canManage && <th>Acciones</th>}
               </tr>
             </thead>
             <tbody>
@@ -314,23 +324,32 @@ export default function TechniciansPage() {
                     <span className="badge">{specialtyLabels[technician.specialty ?? 'general']}</span>
                   </td>
                   <td>
+                    <span className={`status-badge ${technician.isActive === false ? 'is-inactive' : 'is-active'}`}>
+                      {technician.isActive === false ? 'No disponible' : 'Disponible'}
+                    </span>
+                  </td>
+                  {canManage && <td>
                     <div className="row-actions">
                       <button
-                        className="btn btn-ghost btn-small"
+                        className="btn btn-ghost btn-small btn-icon"
                         type="button"
                         onClick={() => openEditPanel(technician)}
+                        aria-label="Editar tecnico"
+                        title="Editar"
                       >
-                        Editar
+                        <ActionIcon name="edit" />
                       </button>
                       <button
-                        className="btn btn-secondary btn-small"
+                        className="btn btn-danger btn-small btn-icon"
                         type="button"
-                        onClick={() => handleDelete(technician)}
+                        onClick={() => handleDeletePermanent(technician)}
+                        aria-label="Eliminar tecnico definitivamente"
+                        title="Eliminar definitivamente"
                       >
-                        Desactivar
+                        <ActionIcon name="delete" />
                       </button>
                     </div>
-                  </td>
+                  </td>}
                 </tr>
               ))}
             </tbody>
@@ -338,7 +357,7 @@ export default function TechniciansPage() {
         </div>
       )}
 
-      {panelOpen && (
+      {canManage && panelOpen && (
         <div className="modal-overlay" role="dialog" aria-modal="true" onClick={closePanel}>
           <div className="modal" onClick={(event) => event.stopPropagation()}>
             <div className="modal-header">
@@ -392,6 +411,23 @@ export default function TechniciansPage() {
                   ))}
                 </select>
               </label>
+              {selectedTechnician && (
+                <label className="field">
+                  <span>Estado</span>
+                  <select
+                    value={formState.isActive === false ? 'inactive' : 'active'}
+                    onChange={(event) =>
+                      setFormState((prev) => ({
+                        ...prev,
+                        isActive: event.target.value === 'active',
+                      }))
+                    }
+                  >
+                    <option value="active">Disponible</option>
+                    <option value="inactive">No disponible</option>
+                  </select>
+                </label>
+              )}
               <div className="form-actions field-full">
                 <button
                   className="btn btn-primary"

@@ -1,6 +1,6 @@
-# Servicio Tecnico Front
+# Servicio Técnico Front
 
-Frontend en React + Vite para Servicio Tecnico.
+Frontend en React + Vite para administrar trabajos de un servicio técnico de electrónica. El sistema contempla celulares, notebooks, computadores, equipos Apple, pantallas y otros dispositivos electrónicos.
 
 ## Requisitos
 
@@ -19,7 +19,7 @@ VITE_SERVER_URL=http://localhost:3500
 Si accedes desde otro equipo de la red (iPad, notebook, etc.), usa una URL alcanzable por ese equipo:
 
 ```dotenv
-VITE_SERVER_URL=http://:3500
+VITE_SERVER_URL=http://IP_DEL_SERVIDOR:3500
 ```
 
 ## Scripts
@@ -45,7 +45,50 @@ npm run preview
 - `/customers`: protegido.
 - `/technicians`: protegido.
 - `/products`: protegido.
+- `/service-orders`: protegido.
 - `/users`: protegido; ademas valida permisos admin en la pagina.
+
+## Roles y alcances
+
+| Función | Admin | Recepción | Técnico |
+|---|:---:|:---:|:---:|
+| Ver y crear clientes | Sí | Sí | No |
+| Editar datos de clientes | Sí | Sí | No |
+| Cambiar disponibilidad de clientes | Sí | No | No |
+| Ver técnicos | Sí, todos | Sí, disponibles | No |
+| Crear, editar estado o eliminar técnicos | Sí | No | No |
+| Ver productos | Sí | Sí | Sí |
+| Administrar productos | Sí | No | No |
+| Crear órdenes | Sí | Sí | No |
+| Editar recepción y asignación | Sí | Sí, según estado | No |
+| Registrar diagnóstico, trabajo y repuestos | Sí | No | Sí, en sus órdenes |
+| Marcar una orden completada como entregada | Sí | Sí | No |
+| Cancelar o eliminar físicamente órdenes | Sí | No | No |
+| Administrar usuarios | Sí | No | No |
+
+### Disponibilidad de clientes y técnicos
+
+- El administrador ve registros disponibles y no disponibles; recepción solo recibe los disponibles desde la API.
+- La disponibilidad se cambia dentro del formulario **Editar**, no mediante una acción separada en la tabla.
+- Un cliente no disponible no puede utilizarse para crear o reasignar una orden.
+- Un técnico no disponible no aparece al crear una orden y la API rechaza cualquier asignación nueva hacia ese técnico.
+- Si una orden histórica ya tiene asignado un técnico no disponible, el formulario conserva y muestra esa referencia como `No disponible`.
+- El borrado físico de clientes y técnicos es exclusivo del administrador y solo se permite cuando no existen órdenes asociadas.
+
+## Flujo de órdenes de servicio
+
+Estados soportados:
+
+```text
+Pendiente -> En proceso -> Espera repuestos -> En proceso -> Completada -> Entregada
+```
+
+- El técnico solo ve sus órdenes asignadas y puede actualizar diagnóstico, trabajo realizado, repuestos y transiciones técnicas válidas.
+- Recepción administra los datos de ingreso mientras la orden está pendiente, asigna técnico/prioridad/fecha en estados operativos y entrega órdenes completadas.
+- El administrador puede ver y modificar toda la orden. La cancelación usa una acción específica para devolver correctamente los repuestos al stock.
+- Una orden cancelada se identifica con una etiqueta roja.
+- El administrador puede eliminar físicamente cualquier orden; la acción queda en auditoría y restaura inventario cuando corresponde.
+- Los formularios `PATCH` envían y conservan únicamente los cambios permitidos para cada rol.
 
 ## Flujo de autenticacion y sesion
 
@@ -74,6 +117,10 @@ npm run preview
 - Desde el listado de ordenes tambien se puede disparar impresion manual por fila.
 - El backend no imprime automaticamente al crear la orden; la impresion es un paso manual y explicito.
 
+## Acciones de tabla
+
+Las acciones usan iconos SVG minimalistas y accesibles, con texto descriptivo mediante `title` y `aria-label`. Según el módulo y los permisos pueden aparecer acciones para ver, editar, imprimir, cancelar o eliminar definitivamente.
+
 ## Arquitectura y Buenas Prácticas
 
 El codigo del frontend sigue principios modernos de modularizacion y desacoplamiento de componentes para asegurar un mantenimiento escalable y limpio:
@@ -92,4 +139,3 @@ Para evitar paginas masivas y de dificil mantenimiento, las vistas principales d
 - **`<Modulo>Table.tsx`**: Componente de presentacion dedicado exclusivamente a la maquetacion y visualizacion de la tabla de datos.
 - **`<Modulo>Form.tsx`**: Componente de presentacion para la visualizacion del modal overlay, los campos del formulario, las validaciones locales y los accesos de teclado nativos (como cerrar con Escape).
 - **`<Modulo>Page.tsx`**: Vista de entrada de la ruta que actua puramente como orquestador declarativo combinando el custom hook con los subcomponentes.
-

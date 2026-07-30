@@ -2,8 +2,12 @@ import AdminLayout from '../components/AdminLayout.tsx'
 import { useCustomers } from './customers/useCustomers.ts'
 import CustomerTable from './customers/CustomerTable.tsx'
 import CustomerForm from './customers/CustomerForm.tsx'
+import { getSession } from '../auth/session.ts'
+import { hasCapability } from '../auth/capabilities.ts'
 
 export default function CustomersPage() {
+  const role = getSession()?.role
+  const canDeactivate = hasCapability(role, 'deactivate_customers')
   const {
     status,
     errorMessage,
@@ -23,8 +27,8 @@ export default function CustomersPage() {
     openEditPanel,
     closePanel,
     handleSubmit,
-    handleDelete,
-  } = useCustomers()
+    handlePermanentDelete,
+  } = useCustomers(canDeactivate)
 
   return (
     <AdminLayout
@@ -65,7 +69,7 @@ export default function CustomersPage() {
 
       {status === 'idle' && filteredCustomers.length === 0 && (
         <div className="state-card">
-          <p>No hay clientes activos registrados.</p>
+          <p>No hay clientes registrados.</p>
           <button className="btn btn-secondary" type="button" onClick={openCreatePanel}>
             Crear primer cliente
           </button>
@@ -76,7 +80,8 @@ export default function CustomersPage() {
         <CustomerTable
           customers={filteredCustomers}
           onEdit={openEditPanel}
-          onDelete={handleDelete}
+          onPermanentDelete={handlePermanentDelete}
+          canDeletePermanently={canDeactivate}
           resolveCustomerId={resolveCustomerId}
         />
       )}
@@ -89,6 +94,7 @@ export default function CustomersPage() {
           isSaving={isSaving}
           isEditing={isEditing}
           isDirty={isDirty}
+          canChangeStatus={canDeactivate}
           onSubmit={handleSubmit}
           onClose={closePanel}
         />

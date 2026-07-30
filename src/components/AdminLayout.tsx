@@ -2,12 +2,13 @@ import type { ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { getSession } from '../auth/session.ts'
 import { useLogout } from '../auth/useLogout.ts'
+import AppFooter from './AppFooter.tsx'
 
 type AdminLayoutProps = {
   title: string
   subtitle: string
-  actionLabel: string
-  onAction: () => void
+  actionLabel?: string
+  onAction?: () => void
   children: ReactNode
 }
 
@@ -47,20 +48,17 @@ export default function AdminLayout({
               <h1>{title}</h1>
               <p>{subtitle}</p>
             </div>
-            <button className="btn btn-primary" type="button" onClick={onAction}>
-              {actionLabel}
-            </button>
+            {actionLabel && onAction && (
+              <button className="btn btn-primary" type="button" onClick={onAction}>
+                {actionLabel}
+              </button>
+            )}
           </div>
           {children}
         </section>
       </main>
 
-      <footer className="footer">
-        <div className="container footer-inner">
-          <span>Servicio Tecnico</span>
-          <span>v{__APP_VERSION__}</span>
-        </div>
-      </footer>
+      <AppFooter />
     </div>
   )
 }

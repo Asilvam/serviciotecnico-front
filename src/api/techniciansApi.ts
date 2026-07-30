@@ -14,4 +14,7 @@ export const techniciansApi = {
   remove(id: string) {
     return apiClient.delete<void>(`/technicians/${id}`)
   },
+  deletePermanent(id: string) {
+    return apiClient.delete<void>(`/technicians/${id}/permanent`)
+  },
 }

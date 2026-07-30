@@ -3,6 +3,7 @@ import Swal from 'sweetalert2'
 import { Link, useNavigate } from 'react-router-dom'
 import { getProfileRequest, loginRequest } from '../auth/authApi.ts'
 import { saveSession, setSessionRole } from '../auth/session.ts'
+import AppFooter from '../components/AppFooter.tsx'
 
 type LoginErrors = {
   email?: string
@@ -137,12 +138,7 @@ export default function LoginPage() {
         </section>
       </main>
 
-      <footer className="footer">
-        <div className="container footer-inner">
-          <span>Servicio Tecnico</span>
-          <span>v{__APP_VERSION__}</span>
-        </div>
-      </footer>
+      <AppFooter />
     </div>
   )
 }

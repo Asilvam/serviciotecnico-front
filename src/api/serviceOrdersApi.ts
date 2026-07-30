@@ -17,8 +17,11 @@ export const serviceOrdersApi = {
   update(id: string, payload: UpdateServiceOrderPayload) {
     return apiClient.patch<ServiceOrder>(`/service-orders/${id}`, payload)
   },
-  remove(id: string) {
-    return apiClient.delete<void>(`/service-orders/${id}`)
+  cancel(id: string) {
+    return apiClient.delete<ServiceOrder>(`/service-orders/${id}`)
+  },
+  deletePermanent(id: string) {
+    return apiClient.delete<void>(`/service-orders/${id}/permanent`)
   },
   print(id: string) {
     return apiClient.post<PrintTicketResult>(`/service-orders/${id}/print-80mm`, {})

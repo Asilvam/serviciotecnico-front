@@ -17,4 +17,5 @@ export type TechnicianPayload = {
   email: string
   phone?: string
   specialty?: TechnicianSpecialty
+  isActive?: boolean
 }

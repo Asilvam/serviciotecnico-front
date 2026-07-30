@@ -1,3 +1,5 @@
+export type ProductType = 'part' | 'service'
+
 export type Product = {
   id?: string
   _id?: string
@@ -5,6 +7,7 @@ export type Product = {
   description?: string
   sku: string
   price: number
+  type?: ProductType
   stock?: number
   isActive?: boolean
   createdAt?: string
@@ -16,5 +19,6 @@ export type ProductPayload = {
   description?: string
   sku: string
   price: number
+  type?: ProductType
   stock?: number
 }

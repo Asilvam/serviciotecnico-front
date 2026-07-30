@@ -30,7 +30,7 @@ createRoot(document.getElementById('root')!).render(
         <Route
           path="/dashboard"
           element={
-            <ProtectedRoute>
+            <ProtectedRoute allowedRoles={['admin', 'receptionist', 'technician']}>
               <DashboardPage />
             </ProtectedRoute>
           }
@@ -38,7 +38,7 @@ createRoot(document.getElementById('root')!).render(
         <Route
           path="/customers"
           element={
-            <ProtectedRoute>
+            <ProtectedRoute allowedRoles={['admin', 'receptionist']}>
               <CustomersPage />
             </ProtectedRoute>
           }
@@ -46,7 +46,7 @@ createRoot(document.getElementById('root')!).render(
         <Route
           path="/technicians"
           element={
-            <ProtectedRoute>
+            <ProtectedRoute allowedRoles={['admin', 'receptionist']}>
               <TechniciansPage />
             </ProtectedRoute>
           }
@@ -54,7 +54,7 @@ createRoot(document.getElementById('root')!).render(
         <Route
           path="/products"
           element={
-            <ProtectedRoute>
+            <ProtectedRoute allowedRoles={['admin', 'receptionist', 'technician']}>
               <ProductsPage />
             </ProtectedRoute>
           }
@@ -62,7 +62,7 @@ createRoot(document.getElementById('root')!).render(
         <Route
           path="/service-orders"
           element={
-            <ProtectedRoute>
+            <ProtectedRoute allowedRoles={['admin', 'receptionist', 'technician']}>
               <ServiceOrdersPage />
             </ProtectedRoute>
           }
@@ -70,7 +70,7 @@ createRoot(document.getElementById('root')!).render(
         <Route
           path="/users"
           element={
-            <ProtectedRoute>
+            <ProtectedRoute allowedRoles={['admin']}>
               <UsersPage />
             </ProtectedRoute>
           }
