@@ -47,6 +47,7 @@ npm run preview
 - `/products`: protegido.
 - `/service-orders`: protegido.
 - `/users`: protegido; ademas valida permisos admin en la pagina.
+- `/tracking/:token`: público; muestra únicamente el estado seguro asociado al QR.
 
 ## Roles y alcances
 
@@ -112,10 +113,21 @@ Pendiente -> En proceso -> Espera repuestos -> En proceso -> Completada -> Entre
 
 ## Flujo de impresion de ordenes
 
-- Al crear una orden de servicio, el frontend muestra una confirmacion para imprimir el ticket.
-- Solo si el usuario confirma, el frontend llama `POST /service-orders/:id/print-80mm`.
+- Al crear una orden de servicio, el frontend permite elegir `No imprimir`,
+  `Ticket térmico (80 mm)` o `Resumen normal (Letter)`.
+- `No imprimir` es la opción inicial y no crea ningún trabajo.
+- Las otras opciones llaman `POST /service-orders/:id/print` enviando
+  `printerProfile`.
 - Desde el listado de ordenes tambien se puede disparar impresion manual por fila.
 - El backend no imprime automaticamente al crear la orden; la impresion es un paso manual y explicito.
+- La API responde `202` con un `jobId`; el frontend consulta el trabajo hasta saber si los datos llegaron al dispositivo, fallaron o quedaron con resultado incierto.
+- Según `printerProfile`, la interfaz comunica “ticket” para la térmica o “resumen” para el PDF A4/Carta.
+- Si el agent está desconectado se muestra el `503` recibido, y si el hardware, PDF o QR falla se presenta el error reportado por el agent.
+- Después de 30 segundos, `queued` o `printing` se muestran como trabajo aún activo y no como error. `unknown` pide revisar físicamente antes de reimprimir.
+- Ambos documentos incluyen un QR firmado hacia `/tracking/:token`, sin exponer datos personales ni el identificador interno directamente.
+- La página pública muestra hasta cuándo estará disponible una orden entregada o
+  cancelada. Si la API responde `410`, presenta “Seguimiento expirado” en lugar
+  de confundirlo con una orden inexistente.
 
 ## Acciones de tabla
 

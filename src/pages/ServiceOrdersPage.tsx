@@ -8,6 +8,9 @@ import { serviceOrdersApi } from '../api/serviceOrdersApi.ts'
 import { techniciansApi } from '../api/techniciansApi.ts'
 import type {
   CreateServiceOrderPayload,
+  PrinterProfile,
+  PrintJob,
+  PrintJobStatus,
   ServiceOrder,
   ServiceOrderPriority,
   ServiceOrderStatus,
@@ -34,6 +37,145 @@ const priorityLabels: Record<ServiceOrderPriority, string> = {
   medium: 'Media',
   high: 'Alta',
   urgent: 'Urgente',
+}
+
+const terminalPrintStatuses = new Set<PrintJobStatus>([
+  'sent_to_printer',
+  'sent_to_printer_with_warning',
+  'failed',
+  'unknown',
+])
+
+const wait = (milliseconds: number) =>
+  new Promise<void>((resolve) => window.setTimeout(resolve, milliseconds))
+
+async function waitForPrintJob(
+  jobId: string,
+): Promise<{ job: PrintJob; timedOut: boolean }> {
+  const deadline = Date.now() + 30000
+  let latestJob: PrintJob | undefined
+  while (Date.now() < deadline) {
+    latestJob = await serviceOrdersApi.getPrintJob(jobId)
+    if (terminalPrintStatuses.has(latestJob.status)) {
+      return { job: latestJob, timedOut: false }
+    }
+    await wait(750)
+  }
+  return {
+    job: latestJob ?? (await serviceOrdersApi.getPrintJob(jobId)),
+    timedOut: true,
+  }
+}
+
+async function selectPrintProfile(
+  orderNumber?: string,
+  orderCreated = false,
+): Promise<PrinterProfile | undefined> {
+  const result = await Swal.fire({
+    icon: orderCreated ? 'success' : 'question',
+    title: orderCreated ? 'Orden creada' : 'Impresión de orden',
+    text: orderCreated
+      ? `La orden ${orderNumber ?? ''} fue registrada. Selecciona una opción.`
+      : orderNumber
+        ? `Selecciona una opción para la orden ${orderNumber}.`
+        : 'Selecciona una opción de impresión.',
+    input: 'radio',
+    inputOptions: {
+      none: 'No imprimir',
+      thermal_escpos: 'Ticket térmico (80 mm)',
+      system_pdf: 'Resumen normal (Letter)',
+    },
+    inputValue: 'none',
+    inputValidator: (value) =>
+      value ? undefined : 'Selecciona una opción para continuar.',
+    showCancelButton: true,
+    confirmButtonText: 'Continuar',
+    cancelButtonText: 'Cerrar',
+    confirmButtonColor: '#2c5f7c',
+    cancelButtonColor: '#7f8c8d',
+  })
+
+  if (
+    !result.isConfirmed ||
+    result.value === 'none' ||
+    (result.value !== 'thermal_escpos' && result.value !== 'system_pdf')
+  ) {
+    return undefined
+  }
+  return result.value
+}
+
+async function executePrint(
+  orderId: string,
+  printerProfile: PrinterProfile,
+): Promise<void> {
+  try {
+    const dispatch = await serviceOrdersApi.print(orderId, printerProfile)
+    const documentName =
+      dispatch.printerProfile === 'system_pdf' ? 'resumen de la orden' : 'ticket térmico'
+    void Swal.fire({
+      title: `Imprimiendo ${documentName}`,
+      text: `Trabajo ${dispatch.jobId.slice(0, 8)} en cola.`,
+      allowEscapeKey: false,
+      allowOutsideClick: false,
+      didOpen: () => Swal.showLoading(),
+    })
+
+    const result = await waitForPrintJob(dispatch.jobId)
+    const { job } = result
+    Swal.close()
+
+    if (result.timedOut) {
+      await Swal.fire({
+        icon: 'info',
+        title: 'La impresion sigue en proceso',
+        text: `El trabajo ${job.jobId.slice(0, 8)} permanece ${job.status === 'printing' ? 'en la impresora' : 'en cola'}. No lo reenvies sin verificar primero el documento físico.`,
+        confirmButtonText: 'Entendido',
+        confirmButtonColor: '#2c5f7c',
+      })
+      return
+    }
+
+    if (job.status === 'failed') {
+      throw new Error(job.errorMessage || 'La impresora no pudo completar el trabajo.')
+    }
+
+    if (job.status === 'unknown') {
+      await Swal.fire({
+        icon: 'warning',
+        title: 'Resultado de impresion incierto',
+        text: `${job.errorMessage || 'La conexion se interrumpio durante el envio.'} Revisa la impresora antes de volver a imprimir.`,
+        confirmButtonText: 'Entendido',
+        confirmButtonColor: '#e67e22',
+      })
+      return
+    }
+
+    await Swal.fire({
+      toast: true,
+      position: 'top-end',
+      icon: job.status === 'sent_to_printer_with_warning' ? 'warning' : 'success',
+      title:
+        job.status === 'sent_to_printer_with_warning'
+          ? `${job.printerProfile === 'system_pdf' ? 'Resumen' : 'Ticket'} enviado con observaciones.`
+          : `${job.printerProfile === 'system_pdf' ? 'Resumen' : 'Ticket'} enviado correctamente a la impresora.`,
+      text: job.warnings?.join(' '),
+      showConfirmButton: false,
+      timer: 3500,
+    })
+  } catch (printError) {
+    Swal.close()
+    const message =
+      printError instanceof Error
+        ? printError.message
+        : 'No fue posible imprimir la orden.'
+    await Swal.fire({
+      icon: 'error',
+      title: 'Error de impresion',
+      text: message,
+      confirmButtonColor: '#2c5f7c',
+    })
+  }
 }
 
 type ServiceOrderFormState = CreateServiceOrderPayload & {
@@ -674,39 +816,15 @@ export default function ServiceOrdersPage() {
         const created = await serviceOrdersApi.create(payload)
         setOrders((prev) => [created.order, ...prev])
         
-        const printResult = await Swal.fire({
-          icon: 'success',
-          title: 'Orden creada',
-          text: 'La orden de servicio fue registrada. ¿Deseas imprimir el ticket?',
-          showCancelButton: true,
-          confirmButtonText: 'Si, imprimir',
-          cancelButtonText: 'No, cerrar',
-          confirmButtonColor: '#2c5f7c',
-          cancelButtonColor: '#7f8c8d',
-        })
+        const printerProfile = await selectPrintProfile(
+          created.order.orderNumber,
+          true,
+        )
 
-        if (printResult.isConfirmed) {
+        if (printerProfile) {
           const orderId = resolveOrderId(created.order)
           if (orderId) {
-            try {
-              await serviceOrdersApi.print(orderId)
-              void Swal.fire({
-                toast: true,
-                position: 'top-end',
-                icon: 'success',
-                title: 'Comando de impresion enviado.',
-                showConfirmButton: false,
-                timer: 3000,
-              })
-            } catch (printError) {
-              const msg = printError instanceof Error ? printError.message : 'No fue posible enviar la orden a la impresora.'
-              void Swal.fire({
-                icon: 'error',
-                title: 'Error de impresion',
-                text: msg,
-                confirmButtonColor: '#2c5f7c',
-              })
-            }
+            await executePrint(orderId, printerProfile)
           }
         }
       }
@@ -725,18 +843,8 @@ export default function ServiceOrdersPage() {
   }
 
   const handlePrint = async (order: ServiceOrder) => {
-    const result = await Swal.fire({
-      icon: 'question',
-      title: 'Imprimir orden',
-      text: `Se imprimirá el ticket de la orden ${order.orderNumber || ''}.`,
-      showCancelButton: true,
-      confirmButtonText: 'Si, imprimir',
-      cancelButtonText: 'Cancelar',
-      confirmButtonColor: '#2c5f7c',
-      cancelButtonColor: '#7f8c8d',
-    })
-
-    if (!result.isConfirmed) {
+    const printerProfile = await selectPrintProfile(order.orderNumber)
+    if (!printerProfile) {
       return
     }
 
@@ -751,25 +859,7 @@ export default function ServiceOrdersPage() {
       return
     }
 
-    try {
-      await serviceOrdersApi.print(orderId)
-      void Swal.fire({
-        toast: true,
-        position: 'top-end',
-        icon: 'success',
-        title: 'Comando de impresion enviado.',
-        showConfirmButton: false,
-        timer: 3000,
-      })
-    } catch (printError) {
-      const msg = printError instanceof Error ? printError.message : 'No fue posible enviar la orden a la impresora.'
-      void Swal.fire({
-        icon: 'error',
-        title: 'Error de impresion',
-        text: msg,
-        confirmButtonColor: '#2c5f7c',
-      })
-    }
+    await executePrint(orderId, printerProfile)
   }
 
   const handleCancel = async (order: ServiceOrder) => {
@@ -1023,7 +1113,7 @@ export default function ServiceOrdersPage() {
                         type="button"
                         onClick={() => handlePrint(order)}
                         aria-label="Imprimir orden"
-                        title="Imprimir ticket"
+                        title="Imprimir documento"
                       >
                         <ActionIcon name="print" />
                       </button>

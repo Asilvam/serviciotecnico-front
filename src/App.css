@@ -948,6 +948,84 @@
   text-align: left;
 }
 
+.tracking-main {
+  align-items: center;
+}
+
+.tracking-card {
+  width: min(100%, 720px);
+}
+
+.tracking-eyebrow {
+  margin: 0 0 8px;
+  color: var(--accent);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.tracking-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+}
+
+.tracking-heading h1,
+.tracking-heading p {
+  margin-top: 0;
+}
+
+.tracking-status {
+  flex: 0 0 auto;
+  border-radius: 999px;
+  padding: 8px 14px;
+  color: var(--accent);
+  background: var(--accent-soft);
+  font-weight: 700;
+}
+
+.tracking-status.status-completed,
+.tracking-status.status-delivered {
+  color: var(--success-500);
+  background: color-mix(in srgb, var(--success-500) 14%, transparent);
+}
+
+.tracking-status.status-cancelled {
+  color: var(--danger-500);
+  background: color-mix(in srgb, var(--danger-500) 12%, transparent);
+}
+
+.tracking-details {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin: 28px 0;
+}
+
+.tracking-details div {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 16px;
+  background: color-mix(in srgb, var(--bg-elevated) 84%, var(--accent-soft));
+}
+
+.tracking-details dt {
+  color: var(--text-muted);
+  font-size: 0.88rem;
+}
+
+.tracking-details dd {
+  margin: 6px 0 0;
+  color: var(--text-h);
+  font-weight: 650;
+}
+
+.tracking-note {
+  margin-bottom: 0;
+  color: var(--text-muted);
+}
+
 .form-grid {
   margin-top: 18px;
   display: grid;
@@ -1097,6 +1175,14 @@
   }
 
   .modal .form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .tracking-heading {
+    flex-direction: column;
+  }
+
+  .tracking-details {
     grid-template-columns: 1fr;
   }
 }

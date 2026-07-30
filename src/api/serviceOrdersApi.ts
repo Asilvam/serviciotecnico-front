@@ -1,6 +1,8 @@
 import { apiClient } from './apiClient.ts'
 import type {
   CreateServiceOrderPayload,
+  PrintJob,
+  PrinterProfile,
   PrintTicketResult,
   ServiceOrder,
   ServiceOrderCreateResponse,
@@ -23,7 +25,12 @@ export const serviceOrdersApi = {
   deletePermanent(id: string) {
     return apiClient.delete<void>(`/service-orders/${id}/permanent`)
   },
-  print(id: string) {
-    return apiClient.post<PrintTicketResult>(`/service-orders/${id}/print-80mm`, {})
+  print(id: string, printerProfile: PrinterProfile) {
+    return apiClient.post<PrintTicketResult>(`/service-orders/${id}/print`, {
+      printerProfile,
+    })
+  },
+  getPrintJob(jobId: string) {
+    return apiClient.get<PrintJob>(`/print-jobs/${jobId}`, { bypassCache: true })
   },
 }
