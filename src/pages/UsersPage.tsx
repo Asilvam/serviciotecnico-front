@@ -69,7 +69,9 @@ export default function UsersPage() {
       return false
     }
     const current = normalizePayload(formState)
-    return JSON.stringify({ ...current, password: undefined }) !== JSON.stringify(initialPayload)
+    const profileChanged =
+      JSON.stringify({ ...current, password: undefined }) !== JSON.stringify(initialPayload)
+    return profileChanged || Boolean(current.password)
   }, [selectedUser, initialPayload, formState, normalizePayload])
 
   const filteredUsers = useMemo(() => {

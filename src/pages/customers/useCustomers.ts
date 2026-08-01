@@ -3,6 +3,11 @@ import Swal from 'sweetalert2'
 import { customersApi } from '../../api/customersApi.ts'
 import type { Customer, CustomerPayload } from '../../types/customers.ts'
 import { normalizeChileanRut } from '../../utils/chileanRut.ts'
+import {
+  normalizeChileanMobile,
+  normalizeCustomerEmail,
+  normalizeCustomerName,
+} from '../../utils/customerValidation.ts'
 
 /**
  * Estructura vacía por defecto para inicializar el formulario de clientes.
@@ -58,10 +63,10 @@ export function useCustomers(canChangeStatus = false) {
    */
   const normalizePayload = useCallback(
     (state: CustomerPayload) => ({
-      name: state.name.trim(),
-      email: state.email.trim(),
+      name: normalizeCustomerName(state.name),
+      email: normalizeCustomerEmail(state.email),
       rut: state.rut?.trim() ? normalizeChileanRut(state.rut) : undefined,
-      phone: state.phone?.trim() || undefined,
+      phone: state.phone?.trim() ? normalizeChileanMobile(state.phone) : undefined,
       address: state.address?.trim() || undefined,
       ...(canChangeStatus && state.isActive !== undefined
         ? { isActive: state.isActive }
@@ -78,12 +83,14 @@ export function useCustomers(canChangeStatus = false) {
       return null
     }
     return {
-      name: selectedCustomer.name,
-      email: selectedCustomer.email,
+      name: normalizeCustomerName(selectedCustomer.name),
+      email: normalizeCustomerEmail(selectedCustomer.email),
       rut: selectedCustomer.rut
         ? normalizeChileanRut(selectedCustomer.rut)
         : undefined,
-      phone: selectedCustomer.phone ?? undefined,
+      phone: selectedCustomer.phone
+        ? normalizeChileanMobile(selectedCustomer.phone)
+        : undefined,
       address: selectedCustomer.address ?? undefined,
       ...(canChangeStatus
         ? { isActive: selectedCustomer.isActive !== false }

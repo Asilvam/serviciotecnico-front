@@ -5,6 +5,14 @@ import {
   formatChileanRut,
   isValidChileanRut,
 } from '../../utils/chileanRut.ts'
+import {
+  formatChileanMobile,
+  isValidChileanMobile,
+  isValidCustomerEmail,
+  isValidCustomerName,
+  normalizeCustomerEmail,
+  normalizeCustomerName,
+} from '../../utils/customerValidation.ts'
 
 /**
  * Propiedades requeridas para el componente {@link CustomerForm}.
@@ -84,13 +92,28 @@ export default function CustomerForm({
    * Si está en modo edición y no hay cambios detectados, interrumpe el evento y muestra una alerta.
    */
   const handleValidationAndSubmit = (event: FormEvent<HTMLFormElement>) => {
+    const name = formState.name.trim()
+    const email = formState.email.trim()
+    const phone = formState.phone?.trim() ?? ''
     const rut = formState.rut?.trim() ?? ''
-    if ((!isEditing && !rut) || (rut && !isValidChileanRut(rut))) {
+    let validationMessage = ''
+
+    if (!isValidCustomerName(name)) {
+      validationMessage = 'Ingresa un nombre válido usando letras, espacios, puntos, apóstrofes o guiones.'
+    } else if (!isValidCustomerEmail(email)) {
+      validationMessage = 'Ingresa un correo válido, por ejemplo nombre@correo.cl.'
+    } else if ((!isEditing && !phone) || (phone && !isValidChileanMobile(phone))) {
+      validationMessage = 'Ingresa un celular  válido, por ejemplo +56 9 1234 5678.'
+    } else if ((!isEditing && !rut) || (rut && !isValidChileanRut(rut))) {
+      validationMessage = 'Ingresa un RUT  válido con su dígito verificador.'
+    }
+
+    if (validationMessage) {
       event.preventDefault()
       void Swal.fire({
         icon: 'warning',
-        title: 'RUT inválido',
-        text: 'Ingresa un RUT chileno válido con su dígito verificador.',
+        title: 'Datos inválidos',
+        text: validationMessage,
         confirmButtonColor: '#2c5f7c',
       })
       return
@@ -123,15 +146,27 @@ export default function CustomerForm({
             Cerrar
           </button>
         </div>
-        <form className="form-grid" onSubmit={handleValidationAndSubmit}>
+        <form className="form-grid" onSubmit={handleValidationAndSubmit} noValidate>
           <label className="field">
             <span>Nombre completo</span>
             <input
               type="text"
               value={formState.name}
               onChange={(event) => setFormState((prev) => ({ ...prev, name: event.target.value }))}
+              onBlur={() =>
+                setFormState((prev) => ({
+                  ...prev,
+                  name: normalizeCustomerName(prev.name),
+                }))
+              }
+              autoComplete="name"
+              maxLength={120}
               required
+              aria-invalid={Boolean(formState.name) && !isValidCustomerName(formState.name)}
             />
+            {formState.name && !isValidCustomerName(formState.name) && (
+              <small className="field-error">Usa al menos dos letras; se guardará en mayúsculas.</small>
+            )}
           </label>
           <label className="field">
             <span>RUT</span>
@@ -163,16 +198,42 @@ export default function CustomerForm({
               type="email"
               value={formState.email}
               onChange={(event) => setFormState((prev) => ({ ...prev, email: event.target.value }))}
+              onBlur={() =>
+                setFormState((prev) => ({
+                  ...prev,
+                  email: normalizeCustomerEmail(prev.email),
+                }))
+              }
+              autoComplete="email"
+              maxLength={254}
               required
+              aria-invalid={Boolean(formState.email) && !isValidCustomerEmail(formState.email)}
             />
+            {formState.email && !isValidCustomerEmail(formState.email) && (
+              <small className="field-error">Ingresa un correo válido, por ejemplo nombre@correo.cl.</small>
+            )}
           </label>
           <label className="field">
-            <span>Telefono</span>
+            <span>Celular </span>
             <input
-              type="text"
+              type="tel"
+              inputMode="tel"
+              autoComplete="tel"
               value={formState.phone ?? ''}
               onChange={(event) => setFormState((prev) => ({ ...prev, phone: event.target.value }))}
+              onBlur={() =>
+                setFormState((prev) => ({
+                  ...prev,
+                  phone: prev.phone ? formatChileanMobile(prev.phone) : '',
+                }))
+              }
+              placeholder="+56 9 1234 5678"
+              required={!isEditing}
+              aria-invalid={Boolean(formState.phone) && !isValidChileanMobile(formState.phone ?? '')}
             />
+            {formState.phone && !isValidChileanMobile(formState.phone) && (
+              <small className="field-error">Debe ser un móvil : +56 9 y ocho dígitos.</small>
+            )}
           </label>
           <label className="field">
             <span>Direccion</span>

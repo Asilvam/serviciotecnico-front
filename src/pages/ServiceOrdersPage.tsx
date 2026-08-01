@@ -757,7 +757,10 @@ export default function ServiceOrdersPage() {
   const handleSubmit: ComponentProps<'form'>['onSubmit'] = async (event) => {
     event.preventDefault()
     const normalizedDeviceType = normalizeDeviceType(formState.deviceType)
-    if (!isValidDeviceType(normalizedDeviceType)) {
+    const originalDeviceType = normalizeDeviceType(selectedOrder?.deviceType)
+    const deviceTypeChanged = !selectedOrder || normalizedDeviceType !== originalDeviceType
+    const shouldValidateDeviceType = !selectedOrder || (canEditIntake && deviceTypeChanged)
+    if (shouldValidateDeviceType && !isValidDeviceType(normalizedDeviceType)) {
       setDeviceTypeError('Ingresa solo una palabra en categoria (sin espacios ni simbolos).')
       void Swal.fire({
         icon: 'warning',
@@ -1250,7 +1253,10 @@ export default function ServiceOrdersPage() {
                         onBlur={() => {
                           const normalizedValue = normalizeDeviceType(formState.deviceType)
                           setFormState((prev) => ({ ...prev, deviceType: normalizedValue }))
-                          if (!isValidDeviceType(normalizedValue)) {
+                          const originalValue = normalizeDeviceType(selectedOrder?.deviceType)
+                          const valueChanged = !selectedOrder || normalizedValue !== originalValue
+                          const shouldValidate = !selectedOrder || (canEditIntake && valueChanged)
+                          if (shouldValidate && !isValidDeviceType(normalizedValue)) {
                             setDeviceTypeError('Ingresa solo una palabra en categoria (sin espacios ni simbolos).')
                             return
                           }

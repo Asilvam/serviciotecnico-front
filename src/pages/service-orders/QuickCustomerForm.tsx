@@ -5,6 +5,15 @@ import {
   isValidChileanRut,
   normalizeChileanRut,
 } from '../../utils/chileanRut.ts'
+import {
+  formatChileanMobile,
+  isValidChileanMobile,
+  isValidCustomerEmail,
+  isValidCustomerName,
+  normalizeChileanMobile,
+  normalizeCustomerEmail,
+  normalizeCustomerName,
+} from '../../utils/customerValidation.ts'
 
 type QuickCustomerFormProps = {
   onCreate: (payload: CustomerPayload) => Promise<void>
@@ -27,6 +36,9 @@ export default function QuickCustomerForm({
   const [isSaving, setIsSaving] = useState(false)
   const [errorMessage, setErrorMessage] = useState('')
   const rutIsInvalid = Boolean(formState.rut) && !isValidChileanRut(formState.rut ?? '')
+  const nameIsInvalid = Boolean(formState.name) && !isValidCustomerName(formState.name)
+  const emailIsInvalid = Boolean(formState.email) && !isValidCustomerEmail(formState.email)
+  const phoneIsInvalid = Boolean(formState.phone) && !isValidChileanMobile(formState.phone ?? '')
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -42,18 +54,30 @@ export default function QuickCustomerForm({
     event.preventDefault()
     setErrorMessage('')
 
+    if (!isValidCustomerName(formState.name)) {
+      setErrorMessage('Ingresa un nombre válido usando letras, espacios, puntos, apóstrofes o guiones.')
+      return
+    }
     if (!formState.rut || !isValidChileanRut(formState.rut)) {
-      setErrorMessage('Ingresa un RUT chileno válido con su dígito verificador.')
+      setErrorMessage('Ingresa un RUT  válido con su dígito verificador.')
+      return
+    }
+    if (!isValidCustomerEmail(formState.email)) {
+      setErrorMessage('Ingresa un correo válido, por ejemplo nombre@correo.cl.')
+      return
+    }
+    if (!formState.phone || !isValidChileanMobile(formState.phone)) {
+      setErrorMessage('Ingresa un celular  válido, por ejemplo +56 9 1234 5678.')
       return
     }
 
     setIsSaving(true)
     try {
       await onCreate({
-        name: formState.name.trim(),
+        name: normalizeCustomerName(formState.name),
         rut: normalizeChileanRut(formState.rut),
-        email: formState.email.trim(),
-        phone: formState.phone?.trim() || undefined,
+        email: normalizeCustomerEmail(formState.email),
+        phone: normalizeChileanMobile(formState.phone),
         address: formState.address?.trim() || undefined,
       })
     } catch (error) {
@@ -84,7 +108,7 @@ export default function QuickCustomerForm({
           </button>
         </div>
 
-        <form className="form-grid" onSubmit={handleSubmit}>
+        <form className="form-grid" onSubmit={handleSubmit} noValidate>
           <label className="field">
             <span>Nombre completo</span>
             <input
@@ -93,9 +117,21 @@ export default function QuickCustomerForm({
               onChange={(event) =>
                 setFormState((previous) => ({ ...previous, name: event.target.value }))
               }
+              onBlur={() =>
+                setFormState((previous) => ({
+                  ...previous,
+                  name: normalizeCustomerName(previous.name),
+                }))
+              }
+              autoComplete="name"
+              maxLength={120}
               required
               autoFocus
+              aria-invalid={nameIsInvalid}
             />
+            {nameIsInvalid && (
+              <small className="field-error">Usa al menos dos letras; se guardará en mayúsculas.</small>
+            )}
           </label>
           <label className="field">
             <span>RUT</span>
@@ -127,18 +163,44 @@ export default function QuickCustomerForm({
               onChange={(event) =>
                 setFormState((previous) => ({ ...previous, email: event.target.value }))
               }
+              onBlur={() =>
+                setFormState((previous) => ({
+                  ...previous,
+                  email: normalizeCustomerEmail(previous.email),
+                }))
+              }
+              autoComplete="email"
+              maxLength={254}
               required
+              aria-invalid={emailIsInvalid}
             />
+            {emailIsInvalid && (
+              <small className="field-error">Ingresa un correo válido, por ejemplo nombre@correo.cl.</small>
+            )}
           </label>
           <label className="field">
-            <span>Teléfono</span>
+            <span>Celular </span>
             <input
               type="tel"
+              inputMode="tel"
+              autoComplete="tel"
               value={formState.phone ?? ''}
               onChange={(event) =>
                 setFormState((previous) => ({ ...previous, phone: event.target.value }))
               }
+              onBlur={() =>
+                setFormState((previous) => ({
+                  ...previous,
+                  phone: previous.phone ? formatChileanMobile(previous.phone) : '',
+                }))
+              }
+              placeholder="+56 9 1234 5678"
+              required
+              aria-invalid={phoneIsInvalid}
             />
+            {phoneIsInvalid && (
+              <small className="field-error">Debe ser un móvil : +56 9 y ocho dígitos.</small>
+            )}
           </label>
           <label className="field field-full">
             <span>Dirección</span>
