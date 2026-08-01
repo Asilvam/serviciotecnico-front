@@ -13,12 +13,14 @@ import TechniciansPage from './pages/TechniciansPage.tsx'
 import ProductsPage from './pages/ProductsPage.tsx'
 import UsersPage from './pages/UsersPage.tsx'
 import ServiceOrdersPage from './pages/ServiceOrdersPage.tsx'
+import TrackingPage from './pages/TrackingPage.tsx'
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <BrowserRouter>
       <Routes>
         <Route path="/" element={<App />} />
+        <Route path="/tracking/:token" element={<TrackingPage />} />
         <Route
           path="/login"
           element={

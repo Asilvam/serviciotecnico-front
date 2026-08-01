@@ -1,13 +1,21 @@
 import axios, { type AxiosRequestConfig } from 'axios'
 import { getSession } from '../auth/session.ts'
 
+export class ApiError extends Error {
+  readonly status?: number
+
+  constructor(message: string, status?: number) {
+    super(message)
+    this.name = 'ApiError'
+    this.status = status
+  }
+}
+
 type RequestOptions = {
   headers?: Record<string, string>
   requiresAuth?: boolean
   bypassCache?: boolean
 }
-
-console.log('API Client: VITE_SERVER_URL es', import.meta.env.VITE_SERVER_URL)
 
 const axiosInstance = axios.create({
   baseURL: import.meta.env.VITE_SERVER_URL || 'http://localhost:3500',
@@ -39,7 +47,7 @@ axiosInstance.interceptors.response.use(
   (error) => {
     const errorBody = error.response?.data as { message?: string } | undefined
     const message = errorBody?.message ?? error.message ?? 'Ocurrio un error al procesar la solicitud.'
-    return Promise.reject(new Error(message))
+    return Promise.reject(new ApiError(message, error.response?.status))
   }
 )
 

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react
 import Swal from 'sweetalert2'
 import { customersApi } from '../../api/customersApi.ts'
 import type { Customer, CustomerPayload } from '../../types/customers.ts'
+import { normalizeChileanRut } from '../../utils/chileanRut.ts'
 
 /**
  * Estructura vacía por defecto para inicializar el formulario de clientes.
@@ -9,6 +10,7 @@ import type { Customer, CustomerPayload } from '../../types/customers.ts'
 export const emptyCustomer: CustomerPayload = {
   name: '',
   email: '',
+  rut: '',
   phone: '',
   address: '',
 }
@@ -58,6 +60,7 @@ export function useCustomers(canChangeStatus = false) {
     (state: CustomerPayload) => ({
       name: state.name.trim(),
       email: state.email.trim(),
+      rut: state.rut?.trim() ? normalizeChileanRut(state.rut) : undefined,
       phone: state.phone?.trim() || undefined,
       address: state.address?.trim() || undefined,
       ...(canChangeStatus && state.isActive !== undefined
@@ -77,6 +80,9 @@ export function useCustomers(canChangeStatus = false) {
     return {
       name: selectedCustomer.name,
       email: selectedCustomer.email,
+      rut: selectedCustomer.rut
+        ? normalizeChileanRut(selectedCustomer.rut)
+        : undefined,
       phone: selectedCustomer.phone ?? undefined,
       address: selectedCustomer.address ?? undefined,
       ...(canChangeStatus
@@ -110,6 +116,7 @@ export function useCustomers(canChangeStatus = false) {
       return (
         customer.name.toLowerCase().includes(normalized) ||
         customer.email.toLowerCase().includes(normalized) ||
+        (customer.rut ?? '').toLowerCase().includes(normalized) ||
         (customer.phone ?? '').toLowerCase().includes(normalized)
       )
     })
@@ -150,6 +157,7 @@ export function useCustomers(canChangeStatus = false) {
     setFormState({
       name: customer.name,
       email: customer.email,
+      rut: customer.rut ?? '',
       phone: customer.phone ?? '',
       address: customer.address ?? '',
       ...(canChangeStatus ? { isActive: customer.isActive !== false } : {}),
