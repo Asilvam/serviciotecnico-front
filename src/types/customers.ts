@@ -3,6 +3,7 @@ export type Customer = {
   _id?: string
   name: string
   email: string
+  rut?: string
   phone?: string
   address?: string
   isActive?: boolean
@@ -13,6 +14,7 @@ export type Customer = {
 export type CustomerPayload = {
   name: string
   email: string
+  rut?: string
   phone?: string
   address?: string
   isActive?: boolean

@@ -47,6 +47,7 @@ npm run preview
 - `/products`: protegido.
 - `/service-orders`: protegido.
 - `/users`: protegido; ademas valida permisos admin en la pagina.
+- `/tracking/:token`: público; muestra únicamente el estado seguro asociado al QR.
 
 ## Roles y alcances
 
@@ -74,6 +75,20 @@ npm run preview
 - Un técnico no disponible no aparece al crear una orden y la API rechaza cualquier asignación nueva hacia ese técnico.
 - Si una orden histórica ya tiene asignado un técnico no disponible, el formulario conserva y muestra esa referencia como `No disponible`.
 - El borrado físico de clientes y técnicos es exclusivo del administrador y solo se permite cuando no existen órdenes asociadas.
+
+### Clientes y RUT chileno
+
+- Los clientes nuevos requieren nombre, email y RUT chileno válido; teléfono y dirección son opcionales.
+- El RUT se valida mediante su dígito verificador, se guarda normalizado como `12345678-5` y se muestra como `12.345.678-5`.
+- La API rechaza RUT duplicados.
+- Los clientes históricos sin RUT continúan disponibles para no bloquear órdenes existentes y pueden completarse posteriormente.
+- Al crear una orden, **+ Nuevo cliente** abre un formulario rápido. El cliente creado se agrega al listado y queda seleccionado sin perder los datos de la orden.
+
+### Fechas y horario de Chile
+
+- Las marcas de tiempo se presentan con la zona `America/Santiago`.
+- Las fechas de calendario, como la entrega estimada, se mantienen como `YYYY-MM-DD` para evitar cambios de día por conversión de zona horaria.
+- La API conserva los instantes en UTC; la conversión a horario chileno se realiza al mostrarlos.
 
 ## Flujo de órdenes de servicio
 
@@ -112,10 +127,21 @@ Pendiente -> En proceso -> Espera repuestos -> En proceso -> Completada -> Entre
 
 ## Flujo de impresion de ordenes
 
-- Al crear una orden de servicio, el frontend muestra una confirmacion para imprimir el ticket.
-- Solo si el usuario confirma, el frontend llama `POST /service-orders/:id/print-80mm`.
+- Al crear una orden de servicio, el frontend permite elegir `No imprimir`,
+  `Ticket térmico (80 mm)` o `Resumen normal (Letter)`.
+- `No imprimir` es la opción inicial y no crea ningún trabajo.
+- Las otras opciones llaman `POST /service-orders/:id/print` enviando
+  `printerProfile`.
 - Desde el listado de ordenes tambien se puede disparar impresion manual por fila.
 - El backend no imprime automaticamente al crear la orden; la impresion es un paso manual y explicito.
+- La API responde `202` con un `jobId`; el frontend consulta el trabajo hasta saber si los datos llegaron al dispositivo, fallaron o quedaron con resultado incierto.
+- Según `printerProfile`, la interfaz comunica “ticket” para la térmica o “resumen” para el PDF A4/Carta.
+- Si el agent está desconectado se muestra el `503` recibido, y si el hardware, PDF o QR falla se presenta el error reportado por el agent.
+- Después de 30 segundos, `queued` o `printing` se muestran como trabajo aún activo y no como error. `unknown` pide revisar físicamente antes de reimprimir.
+- Ambos documentos incluyen un QR firmado hacia `/tracking/:token`, sin exponer datos personales ni el identificador interno directamente.
+- La página pública muestra hasta cuándo estará disponible una orden entregada o
+  cancelada. Si la API responde `410`, presenta “Seguimiento expirado” en lugar
+  de confundirlo con una orden inexistente.
 
 ## Acciones de tabla
 

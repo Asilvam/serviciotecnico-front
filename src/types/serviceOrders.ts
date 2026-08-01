@@ -7,6 +7,7 @@ export type ServiceOrderStatus =
   | 'cancelled'
 
 export type ServiceOrderPriority = 'low' | 'medium' | 'high' | 'urgent'
+export type PrinterProfile = 'thermal_escpos' | 'system_pdf'
 
 export type ServiceOrderItem = {
   productId: string
@@ -76,6 +77,10 @@ export type UpdateServiceOrderPayload = {
 export type ServiceOrderCreateResponse = {
   order: ServiceOrder
   actions?: {
+    print?: {
+      method: string
+      url: string
+    }
     print80mm?: {
       method: string
       url: string
@@ -84,11 +89,41 @@ export type ServiceOrderCreateResponse = {
 }
 
 export type PrintTicketResult = {
+  jobId: string
+  printerId: string
+  printerProfile: PrinterProfile
   orderId: string
   orderNumber: string
-  mimeType: 'text/plain'
-  content: string
-  width: number
-  paperWidthMm: number
-  generatedAt: string
+  status: PrintJobStatus
+  queuedAt: string
+}
+
+export type PrintJobStatus =
+  | 'queued'
+  | 'printing'
+  | 'sent_to_printer'
+  | 'sent_to_printer_with_warning'
+  | 'failed'
+  | 'unknown'
+
+export type PrintJob = PrintTicketResult & {
+  startedAt?: string
+  completedAt?: string
+  errorCode?: string
+  errorMessage?: string
+  warnings?: string[]
+}
+
+export type PublicTrackingResult = {
+  orderNumber: string
+  device: {
+    type: string
+    brand: string
+    model?: string
+  }
+  status: ServiceOrderStatus
+  statusLabelEs: string
+  estimatedDelivery?: string
+  updatedAt?: string
+  trackingExpiresAt?: string
 }

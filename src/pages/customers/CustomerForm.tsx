@@ -1,6 +1,10 @@
 import { useEffect, type FormEvent } from 'react'
 import Swal from 'sweetalert2'
 import type { Customer, CustomerPayload } from '../../types/customers.ts'
+import {
+  formatChileanRut,
+  isValidChileanRut,
+} from '../../utils/chileanRut.ts'
 
 /**
  * Propiedades requeridas para el componente {@link CustomerForm}.
@@ -80,6 +84,17 @@ export default function CustomerForm({
    * Si está en modo edición y no hay cambios detectados, interrumpe el evento y muestra una alerta.
    */
   const handleValidationAndSubmit = (event: FormEvent<HTMLFormElement>) => {
+    const rut = formState.rut?.trim() ?? ''
+    if ((!isEditing && !rut) || (rut && !isValidChileanRut(rut))) {
+      event.preventDefault()
+      void Swal.fire({
+        icon: 'warning',
+        title: 'RUT inválido',
+        text: 'Ingresa un RUT chileno válido con su dígito verificador.',
+        confirmButtonColor: '#2c5f7c',
+      })
+      return
+    }
     if (isEditing && !isDirty) {
       event.preventDefault()
       void Swal.fire({
@@ -117,6 +132,30 @@ export default function CustomerForm({
               onChange={(event) => setFormState((prev) => ({ ...prev, name: event.target.value }))}
               required
             />
+          </label>
+          <label className="field">
+            <span>RUT</span>
+            <input
+              type="text"
+              inputMode="text"
+              autoComplete="off"
+              value={formState.rut ?? ''}
+              onChange={(event) =>
+                setFormState((prev) => ({ ...prev, rut: event.target.value }))
+              }
+              onBlur={() =>
+                setFormState((prev) => ({
+                  ...prev,
+                  rut: prev.rut ? formatChileanRut(prev.rut) : '',
+                }))
+              }
+              placeholder="12.345.678-5"
+              required={!isEditing}
+              aria-invalid={Boolean(formState.rut) && !isValidChileanRut(formState.rut ?? '')}
+            />
+            {formState.rut && !isValidChileanRut(formState.rut) && (
+              <small className="field-error">El RUT y su dígito verificador no son válidos.</small>
+            )}
           </label>
           <label className="field">
             <span>Email</span>

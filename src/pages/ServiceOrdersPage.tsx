@@ -8,17 +8,26 @@ import { serviceOrdersApi } from '../api/serviceOrdersApi.ts'
 import { techniciansApi } from '../api/techniciansApi.ts'
 import type {
   CreateServiceOrderPayload,
+  PrinterProfile,
+  PrintJob,
+  PrintJobStatus,
   ServiceOrder,
   ServiceOrderPriority,
   ServiceOrderStatus,
   UpdateServiceOrderPayload,
 } from '../types/serviceOrders.ts'
-import type { Customer } from '../types/customers.ts'
+import type { Customer, CustomerPayload } from '../types/customers.ts'
 import type { Product } from '../types/products.ts'
 import type { Technician } from '../types/technicians.ts'
 import { buildDynamicOptions } from '../utils/dynamicOptions.ts'
 import { getSession } from '../auth/session.ts'
 import { hasCapability } from '../auth/capabilities.ts'
+import QuickCustomerForm from './service-orders/QuickCustomerForm.tsx'
+import {
+  formatChileDate,
+  toCalendarDateInput,
+} from '../utils/chileDateTime.ts'
+import { formatChileanRut } from '../utils/chileanRut.ts'
 
 const statusLabels: Record<ServiceOrderStatus, string> = {
   pending: 'Pendiente',
@@ -34,6 +43,145 @@ const priorityLabels: Record<ServiceOrderPriority, string> = {
   medium: 'Media',
   high: 'Alta',
   urgent: 'Urgente',
+}
+
+const terminalPrintStatuses = new Set<PrintJobStatus>([
+  'sent_to_printer',
+  'sent_to_printer_with_warning',
+  'failed',
+  'unknown',
+])
+
+const wait = (milliseconds: number) =>
+  new Promise<void>((resolve) => window.setTimeout(resolve, milliseconds))
+
+async function waitForPrintJob(
+  jobId: string,
+): Promise<{ job: PrintJob; timedOut: boolean }> {
+  const deadline = Date.now() + 30000
+  let latestJob: PrintJob | undefined
+  while (Date.now() < deadline) {
+    latestJob = await serviceOrdersApi.getPrintJob(jobId)
+    if (terminalPrintStatuses.has(latestJob.status)) {
+      return { job: latestJob, timedOut: false }
+    }
+    await wait(750)
+  }
+  return {
+    job: latestJob ?? (await serviceOrdersApi.getPrintJob(jobId)),
+    timedOut: true,
+  }
+}
+
+async function selectPrintProfile(
+  orderNumber?: string,
+  orderCreated = false,
+): Promise<PrinterProfile | undefined> {
+  const result = await Swal.fire({
+    icon: orderCreated ? 'success' : 'question',
+    title: orderCreated ? 'Orden creada' : 'Impresión de orden',
+    text: orderCreated
+      ? `La orden ${orderNumber ?? ''} fue registrada. Selecciona una opción.`
+      : orderNumber
+        ? `Selecciona una opción para la orden ${orderNumber}.`
+        : 'Selecciona una opción de impresión.',
+    input: 'radio',
+    inputOptions: {
+      none: 'No imprimir',
+      thermal_escpos: 'Ticket térmico (80 mm)',
+      system_pdf: 'Resumen normal (Letter)',
+    },
+    inputValue: 'none',
+    inputValidator: (value) =>
+      value ? undefined : 'Selecciona una opción para continuar.',
+    showCancelButton: true,
+    confirmButtonText: 'Continuar',
+    cancelButtonText: 'Cerrar',
+    confirmButtonColor: '#2c5f7c',
+    cancelButtonColor: '#7f8c8d',
+  })
+
+  if (
+    !result.isConfirmed ||
+    result.value === 'none' ||
+    (result.value !== 'thermal_escpos' && result.value !== 'system_pdf')
+  ) {
+    return undefined
+  }
+  return result.value
+}
+
+async function executePrint(
+  orderId: string,
+  printerProfile: PrinterProfile,
+): Promise<void> {
+  try {
+    const dispatch = await serviceOrdersApi.print(orderId, printerProfile)
+    const documentName =
+      dispatch.printerProfile === 'system_pdf' ? 'resumen de la orden' : 'ticket térmico'
+    void Swal.fire({
+      title: `Imprimiendo ${documentName}`,
+      text: `Trabajo ${dispatch.jobId.slice(0, 8)} en cola.`,
+      allowEscapeKey: false,
+      allowOutsideClick: false,
+      didOpen: () => Swal.showLoading(),
+    })
+
+    const result = await waitForPrintJob(dispatch.jobId)
+    const { job } = result
+    Swal.close()
+
+    if (result.timedOut) {
+      await Swal.fire({
+        icon: 'info',
+        title: 'La impresion sigue en proceso',
+        text: `El trabajo ${job.jobId.slice(0, 8)} permanece ${job.status === 'printing' ? 'en la impresora' : 'en cola'}. No lo reenvies sin verificar primero el documento físico.`,
+        confirmButtonText: 'Entendido',
+        confirmButtonColor: '#2c5f7c',
+      })
+      return
+    }
+
+    if (job.status === 'failed') {
+      throw new Error(job.errorMessage || 'La impresora no pudo completar el trabajo.')
+    }
+
+    if (job.status === 'unknown') {
+      await Swal.fire({
+        icon: 'warning',
+        title: 'Resultado de impresion incierto',
+        text: `${job.errorMessage || 'La conexion se interrumpio durante el envio.'} Revisa la impresora antes de volver a imprimir.`,
+        confirmButtonText: 'Entendido',
+        confirmButtonColor: '#e67e22',
+      })
+      return
+    }
+
+    await Swal.fire({
+      toast: true,
+      position: 'top-end',
+      icon: job.status === 'sent_to_printer_with_warning' ? 'warning' : 'success',
+      title:
+        job.status === 'sent_to_printer_with_warning'
+          ? `${job.printerProfile === 'system_pdf' ? 'Resumen' : 'Ticket'} enviado con observaciones.`
+          : `${job.printerProfile === 'system_pdf' ? 'Resumen' : 'Ticket'} enviado correctamente a la impresora.`,
+      text: job.warnings?.join(' '),
+      showConfirmButton: false,
+      timer: 3500,
+    })
+  } catch (printError) {
+    Swal.close()
+    const message =
+      printError instanceof Error
+        ? printError.message
+        : 'No fue posible imprimir la orden.'
+    await Swal.fire({
+      icon: 'error',
+      title: 'Error de impresion',
+      text: message,
+      confirmButtonColor: '#2c5f7c',
+    })
+  }
 }
 
 type ServiceOrderFormState = CreateServiceOrderPayload & {
@@ -109,6 +257,7 @@ export default function ServiceOrdersPage() {
   const [errorMessage, setErrorMessage] = useState('')
   const [query, setQuery] = useState('')
   const [panelOpen, setPanelOpen] = useState(false)
+  const [quickCustomerOpen, setQuickCustomerOpen] = useState(false)
   const [formState, setFormState] = useState<ServiceOrderFormState>(emptyOrder)
   const [deviceTypeError, setDeviceTypeError] = useState('')
   const [selectedOrder, setSelectedOrder] = useState<ServiceOrder | null>(null)
@@ -204,17 +353,6 @@ export default function ServiceOrdersPage() {
         : 'Sin asignar',
     [techniciansById],
   )
-
-  const formatDate = (value?: string) => {
-    if (!value) {
-      return 'Sin fecha'
-    }
-    const parsed = new Date(value)
-    if (Number.isNaN(parsed.getTime())) {
-      return value
-    }
-    return parsed.toLocaleDateString('es-CL')
-  }
 
   const formatCurrency = (value: number) => `$${value.toLocaleString('es-CL')}`
 
@@ -425,7 +563,7 @@ export default function ServiceOrdersPage() {
       status: selectedOrder.status ?? 'pending',
       priority: selectedOrder.priority ?? 'medium',
       laborCost: selectedOrder.laborCost ?? undefined,
-      estimatedDelivery: selectedOrder.estimatedDelivery ?? undefined,
+      estimatedDelivery: toCalendarDateInput(selectedOrder.estimatedDelivery) || undefined,
       items: sanitizeItems(selectedOrder.items),
     }
     return normalizeUpdatePayload(initialState, selectedOrder)
@@ -445,7 +583,10 @@ export default function ServiceOrdersPage() {
         items: customers.filter((customer) => customer.isActive !== false),
         currentId: formState.customerId,
         resolveId: resolveCustomerId,
-        resolveLabel: (customer) => customer.name,
+        resolveLabel: (customer) =>
+          customer.rut
+            ? `${customer.name} · ${formatChileanRut(customer.rut)}`
+            : customer.name,
         unknownLabel: (id) =>
           selectedOrder?.customerId === id && selectedOrder.customerName
             ? selectedOrder.customerName
@@ -493,11 +634,13 @@ export default function ServiceOrdersPage() {
       const statusLabel = statusLabels[order.status ?? 'pending'].toLowerCase()
       const priorityLabel = priorityLabels[order.priority ?? 'medium'].toLowerCase()
       const customerName = resolveCustomerName(order.customerId, order.customerName).toLowerCase()
+      const customerRut = customersById[order.customerId]?.rut?.toLowerCase() ?? ''
       const technicianName = resolveTechnicianName(order.technicianId, order.technicianName).toLowerCase()
       return (
         (order.orderNumber ?? '').toLowerCase().includes(normalized) ||
         order.customerId.toLowerCase().includes(normalized) ||
         customerName.includes(normalized) ||
+        customerRut.includes(normalized) ||
         order.deviceType.toLowerCase().includes(normalized) ||
         order.deviceBrand.toLowerCase().includes(normalized) ||
         technicianName.includes(normalized) ||
@@ -505,7 +648,7 @@ export default function ServiceOrdersPage() {
           priorityLabel.includes(normalized)
       )
     })
-  }, [orders, query, resolveCustomerName, resolveTechnicianName])
+  }, [orders, query, customersById, resolveCustomerName, resolveTechnicianName])
 
   const itemsTotal = useMemo(() => {
     return (formState.items ?? []).reduce((sum, item) => {
@@ -563,7 +706,7 @@ export default function ServiceOrdersPage() {
       diagnosis: order.diagnosis ?? '',
       workDone: order.workDone ?? '',
       laborCost: order.laborCost,
-      estimatedDelivery: order.estimatedDelivery ?? '',
+      estimatedDelivery: toCalendarDateInput(order.estimatedDelivery),
       items: order.items ?? [],
     })
     setDeviceTypeError('')
@@ -571,6 +714,7 @@ export default function ServiceOrdersPage() {
   }
 
   const closePanel = useCallback(() => {
+    setQuickCustomerOpen(false)
     setPanelOpen(false)
     setSelectedOrder(null)
     setFormState(emptyOrder)
@@ -582,13 +726,33 @@ export default function ServiceOrdersPage() {
       return
     }
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
+      if (event.key === 'Escape' && !quickCustomerOpen) {
         closePanel()
       }
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [panelOpen, closePanel])
+  }, [panelOpen, quickCustomerOpen, closePanel])
+
+  const handleQuickCustomerCreate = async (payload: CustomerPayload) => {
+    const created = await customersApi.create(payload)
+    const customerId = resolveCustomerId(created)
+    if (!customerId) {
+      throw new Error('El cliente fue creado, pero la API no devolvió su identificador.')
+    }
+
+    setCustomers((previous) => [created, ...previous])
+    setFormState((previous) => ({ ...previous, customerId }))
+    setQuickCustomerOpen(false)
+    await Swal.fire({
+      toast: true,
+      position: 'top-end',
+      icon: 'success',
+      title: 'Cliente creado y seleccionado.',
+      showConfirmButton: false,
+      timer: 2500,
+    })
+  }
 
   const handleSubmit: ComponentProps<'form'>['onSubmit'] = async (event) => {
     event.preventDefault()
@@ -674,39 +838,15 @@ export default function ServiceOrdersPage() {
         const created = await serviceOrdersApi.create(payload)
         setOrders((prev) => [created.order, ...prev])
         
-        const printResult = await Swal.fire({
-          icon: 'success',
-          title: 'Orden creada',
-          text: 'La orden de servicio fue registrada. ¿Deseas imprimir el ticket?',
-          showCancelButton: true,
-          confirmButtonText: 'Si, imprimir',
-          cancelButtonText: 'No, cerrar',
-          confirmButtonColor: '#2c5f7c',
-          cancelButtonColor: '#7f8c8d',
-        })
+        const printerProfile = await selectPrintProfile(
+          created.order.orderNumber,
+          true,
+        )
 
-        if (printResult.isConfirmed) {
+        if (printerProfile) {
           const orderId = resolveOrderId(created.order)
           if (orderId) {
-            try {
-              await serviceOrdersApi.print(orderId)
-              void Swal.fire({
-                toast: true,
-                position: 'top-end',
-                icon: 'success',
-                title: 'Comando de impresion enviado.',
-                showConfirmButton: false,
-                timer: 3000,
-              })
-            } catch (printError) {
-              const msg = printError instanceof Error ? printError.message : 'No fue posible enviar la orden a la impresora.'
-              void Swal.fire({
-                icon: 'error',
-                title: 'Error de impresion',
-                text: msg,
-                confirmButtonColor: '#2c5f7c',
-              })
-            }
+            await executePrint(orderId, printerProfile)
           }
         }
       }
@@ -725,18 +865,8 @@ export default function ServiceOrdersPage() {
   }
 
   const handlePrint = async (order: ServiceOrder) => {
-    const result = await Swal.fire({
-      icon: 'question',
-      title: 'Imprimir orden',
-      text: `Se imprimirá el ticket de la orden ${order.orderNumber || ''}.`,
-      showCancelButton: true,
-      confirmButtonText: 'Si, imprimir',
-      cancelButtonText: 'Cancelar',
-      confirmButtonColor: '#2c5f7c',
-      cancelButtonColor: '#7f8c8d',
-    })
-
-    if (!result.isConfirmed) {
+    const printerProfile = await selectPrintProfile(order.orderNumber)
+    if (!printerProfile) {
       return
     }
 
@@ -751,25 +881,7 @@ export default function ServiceOrdersPage() {
       return
     }
 
-    try {
-      await serviceOrdersApi.print(orderId)
-      void Swal.fire({
-        toast: true,
-        position: 'top-end',
-        icon: 'success',
-        title: 'Comando de impresion enviado.',
-        showConfirmButton: false,
-        timer: 3000,
-      })
-    } catch (printError) {
-      const msg = printError instanceof Error ? printError.message : 'No fue posible enviar la orden a la impresora.'
-      void Swal.fire({
-        icon: 'error',
-        title: 'Error de impresion',
-        text: msg,
-        confirmButtonColor: '#2c5f7c',
-      })
-    }
+    await executePrint(orderId, printerProfile)
   }
 
   const handleCancel = async (order: ServiceOrder) => {
@@ -975,7 +1087,7 @@ export default function ServiceOrdersPage() {
             <tbody>
               {filteredOrders.map((order) => (
                 <tr key={resolveOrderId(order) || `${order.customerId}-${order.deviceType}`}>
-                  <td className="cell-date">{formatDate(order.createdAt)}</td>
+                  <td className="cell-date">{formatChileDate(order.createdAt)}</td>
                   <td>
                     <div className="cell-title">{order.orderNumber || 'Sin folio'}</div>
                     <span className="cell-subtitle">
@@ -1023,7 +1135,7 @@ export default function ServiceOrdersPage() {
                         type="button"
                         onClick={() => handlePrint(order)}
                         aria-label="Imprimir orden"
-                        title="Imprimir ticket"
+                        title="Imprimir documento"
                       >
                         <ActionIcon name="print" />
                       </button>
@@ -1093,9 +1205,21 @@ export default function ServiceOrdersPage() {
                       : 'Identifica al cliente y describe el equipo que queda en el servicio tecnico.'}
                   </p>
                   <div className="form-grid">
-                    <label className="field">
-                      <span>Cliente</span>
+                    <div className="field">
+                      <div className="field-label-actions">
+                        <label htmlFor="service-order-customer">Cliente</label>
+                        {!isEditing && canCreate && (
+                          <button
+                            className="btn btn-ghost btn-small"
+                            type="button"
+                            onClick={() => setQuickCustomerOpen(true)}
+                          >
+                            + Nuevo cliente
+                          </button>
+                        )}
+                      </div>
                       <select
+                        id="service-order-customer"
                         value={formState.customerId}
                         onChange={(event) =>
                           setFormState((prev) => ({ ...prev, customerId: event.target.value }))
@@ -1110,7 +1234,7 @@ export default function ServiceOrdersPage() {
                           </option>
                         ))}
                       </select>
-                    </label>
+                    </div>
                     <label className="field">
                       <span>Categoria o tipo de equipo</span>
                       <input
@@ -1428,6 +1552,13 @@ export default function ServiceOrdersPage() {
             </form>
           </div>
         </div>
+      )}
+
+      {panelOpen && quickCustomerOpen && (
+        <QuickCustomerForm
+          onCreate={handleQuickCustomerCreate}
+          onClose={() => setQuickCustomerOpen(false)}
+        />
       )}
     </AdminLayout>
   )
