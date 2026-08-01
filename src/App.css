@@ -431,6 +431,10 @@
   animation: fadeIn 160ms ease;
 }
 
+.modal-overlay-nested {
+  z-index: 35;
+}
+
 .swal2-container {
   z-index: 40;
 }
@@ -1076,6 +1080,22 @@
   padding: 10px 12px;
   box-sizing: border-box;
   font: inherit;
+}
+
+.field-label-actions {
+  min-height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.field-label-actions label {
+  font-weight: 600;
+}
+
+.customer-rut {
+  display: block;
 }
 
 .field textarea {

@@ -4,16 +4,10 @@ import { trackingApi } from '../api/trackingApi.ts'
 import { ApiError } from '../api/apiClient.ts'
 import AppFooter from '../components/AppFooter.tsx'
 import type { PublicTrackingResult } from '../types/serviceOrders.ts'
-
-function formatDate(value?: string): string {
-  if (!value) {
-    return 'Sin fecha informada'
-  }
-  return new Intl.DateTimeFormat('es-CL', {
-    dateStyle: 'medium',
-    timeStyle: 'short',
-  }).format(new Date(value))
-}
+import {
+  formatChileCalendarDate,
+  formatChileDateTime,
+} from '../utils/chileDateTime.ts'
 
 export default function TrackingPage() {
   const { token = '' } = useParams()
@@ -104,16 +98,16 @@ export default function TrackingPage() {
               <dl className="tracking-details">
                 <div>
                   <dt>Entrega estimada</dt>
-                  <dd>{formatDate(tracking.estimatedDelivery)}</dd>
+                  <dd>{formatChileCalendarDate(tracking.estimatedDelivery)}</dd>
                 </div>
                 <div>
                   <dt>Última actualización</dt>
-                  <dd>{formatDate(tracking.updatedAt)}</dd>
+                  <dd>{formatChileDateTime(tracking.updatedAt)}</dd>
                 </div>
                 {tracking.trackingExpiresAt && (
                   <div>
                     <dt>Seguimiento disponible hasta</dt>
-                    <dd>{formatDate(tracking.trackingExpiresAt)}</dd>
+                    <dd>{formatChileDateTime(tracking.trackingExpiresAt)}</dd>
                   </div>
                 )}
               </dl>

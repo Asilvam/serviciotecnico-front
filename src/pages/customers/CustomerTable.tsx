@@ -1,5 +1,6 @@
 import type { Customer } from '../../types/customers.ts'
 import ActionIcon from '../../components/ActionIcon.tsx'
+import { formatChileanRut } from '../../utils/chileanRut.ts'
 
 /**
  * Propiedades requeridas para el componente {@link CustomerTable}.
@@ -69,6 +70,9 @@ export default function CustomerTable({
               <td>
                 <div className="cell-title">{customer.name}</div>
                 <span className="cell-subtitle">{customer.email}</span>
+                <span className="cell-subtitle customer-rut">
+                  {customer.rut ? `RUT ${formatChileanRut(customer.rut)}` : 'RUT pendiente'}
+                </span>
               </td>
               <td>{customer.phone || 'Sin telefono'}</td>
               <td>{customer.address || 'Sin direccion'}</td>

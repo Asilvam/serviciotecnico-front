@@ -42,7 +42,7 @@ export default function CustomersPage() {
           <span>Buscar</span>
           <input
             type="search"
-            placeholder="Nombre, email o telefono"
+            placeholder="Nombre, RUT, email o telefono"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
           />

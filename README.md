@@ -76,6 +76,20 @@ npm run preview
 - Si una orden histórica ya tiene asignado un técnico no disponible, el formulario conserva y muestra esa referencia como `No disponible`.
 - El borrado físico de clientes y técnicos es exclusivo del administrador y solo se permite cuando no existen órdenes asociadas.
 
+### Clientes y RUT chileno
+
+- Los clientes nuevos requieren nombre, email y RUT chileno válido; teléfono y dirección son opcionales.
+- El RUT se valida mediante su dígito verificador, se guarda normalizado como `12345678-5` y se muestra como `12.345.678-5`.
+- La API rechaza RUT duplicados.
+- Los clientes históricos sin RUT continúan disponibles para no bloquear órdenes existentes y pueden completarse posteriormente.
+- Al crear una orden, **+ Nuevo cliente** abre un formulario rápido. El cliente creado se agrega al listado y queda seleccionado sin perder los datos de la orden.
+
+### Fechas y horario de Chile
+
+- Las marcas de tiempo se presentan con la zona `America/Santiago`.
+- Las fechas de calendario, como la entrega estimada, se mantienen como `YYYY-MM-DD` para evitar cambios de día por conversión de zona horaria.
+- La API conserva los instantes en UTC; la conversión a horario chileno se realiza al mostrarlos.
+
 ## Flujo de órdenes de servicio
 
 Estados soportados:
