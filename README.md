@@ -128,14 +128,16 @@ Pendiente -> En proceso -> Espera repuestos -> En proceso -> Completada -> Entre
 ## Flujo de impresion de ordenes
 
 - Al crear una orden de servicio, el frontend permite elegir `No imprimir`,
-  `Ticket térmico (80 mm)` o `Resumen normal (Letter)`.
+  `Ticket térmico (80 mm mediante Windows)` o `Resumen normal (Letter)`.
 - `No imprimir` es la opción inicial y no crea ningún trabajo.
 - Las otras opciones llaman `POST /service-orders/:id/print` enviando
   `printerProfile`.
 - Desde el listado de ordenes tambien se puede disparar impresion manual por fila.
 - El backend no imprime automaticamente al crear la orden; la impresion es un paso manual y explicito.
 - La API responde `202` con un `jobId`; el frontend consulta el trabajo hasta saber si los datos llegaron al dispositivo, fallaron o quedaron con resultado incierto.
-- Según `printerProfile`, la interfaz comunica “ticket” para la térmica o “resumen” para el PDF A4/Carta.
+- Según `printerProfile`, la interfaz comunica “ticket” para la térmica o
+  “resumen” para el PDF A4/Carta. Ambos se envían mediante la impresora
+  predeterminada del sistema; el ticket ya no usa acceso USB directo.
 - Si el agent está desconectado se muestra el `503` recibido, y si el hardware, PDF o QR falla se presenta el error reportado por el agent.
 - Después de 30 segundos, `queued` o `printing` se muestran como trabajo aún activo y no como error. `unknown` pide revisar físicamente antes de reimprimir.
 - Ambos documentos incluyen un QR firmado hacia `/tracking/:token`, sin exponer datos personales ni el identificador interno directamente.

@@ -88,7 +88,7 @@ async function selectPrintProfile(
     input: 'radio',
     inputOptions: {
       none: 'No imprimir',
-      thermal_escpos: 'Ticket térmico (80 mm)',
+      thermal_escpos: 'Ticket térmico (80 mm mediante Windows)',
       system_pdf: 'Resumen normal (Letter)',
     },
     inputValue: 'none',
