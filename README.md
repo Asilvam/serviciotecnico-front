@@ -137,8 +137,10 @@ Pendiente -> En proceso -> Espera repuestos -> En proceso -> Completada -> Entre
 - La API responde `202` con un `jobId`; el frontend consulta el trabajo hasta saber si los datos llegaron al dispositivo, fallaron o quedaron con resultado incierto.
 - Según `printerProfile`, la interfaz comunica “ticket” para la térmica o
   “resumen” para el PDF A4/Carta. Ambos se envían mediante la impresora
-  predeterminada del sistema; el ticket ya no usa acceso USB directo.
-- Si el agent está desconectado se muestra el `503` recibido, y si el hardware, PDF o QR falla se presenta el error reportado por el agent.
+  predeterminada del sistema; en Windows el ticket usa la cola RAW y espera su
+  resultado, sin acceso USB directo.
+- Si el agent está desconectado se muestra el `503` recibido, y si el hardware,
+  PDF, QR o la cola RAW falla se presenta el error reportado por el agent.
 - Después de 30 segundos, `queued` o `printing` se muestran como trabajo aún activo y no como error. `unknown` pide revisar físicamente antes de reimprimir.
 - Ambos documentos incluyen un QR firmado hacia `/tracking/:token`, sin exponer datos personales ni el identificador interno directamente.
 - La página pública muestra hasta cuándo estará disponible una orden entregada o

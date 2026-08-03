@@ -163,8 +163,8 @@ async function executePrint(
       icon: job.status === 'sent_to_printer_with_warning' ? 'warning' : 'success',
       title:
         job.status === 'sent_to_printer_with_warning'
-          ? `${job.printerProfile === 'system_pdf' ? 'Resumen' : 'Ticket'} enviado con observaciones.`
-          : `${job.printerProfile === 'system_pdf' ? 'Resumen' : 'Ticket'} enviado correctamente a la impresora.`,
+          ? `${job.printerProfile === 'system_pdf' ? 'Resumen' : 'Ticket'} procesado con observaciones. Revisa la cola de impresión.`
+          : `${job.printerProfile === 'system_pdf' ? 'Resumen enviado a la cola de impresión' : 'Ticket procesado por la cola de Windows'}.`,
       text: job.warnings?.join(' '),
       showConfirmButton: false,
       timer: 3500,
