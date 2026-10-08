@@ -1212,3 +1212,67 @@
     padding: 34px;
   }
 }
+
+/* Print choice: one readable, clickable option per row. */
+.print-options-popup {
+  width: min(440px, calc(100vw - 32px));
+  padding: 8px 0 24px;
+}
+
+.print-options-popup .swal2-title {
+  font-size: 1.5rem;
+}
+
+.print-options-popup .swal2-html-container {
+  white-space: pre-line;
+  line-height: 1.6;
+  margin: 12px 24px 0;
+  font-size: 0.95rem;
+  overflow-wrap: anywhere;
+}
+
+.print-options-popup .swal2-radio.print-options-list {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
+  margin: 24px 24px 0;
+  padding: 0;
+  background: transparent;
+}
+
+.print-options-list label {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0;
+  padding: 14px 16px;
+  border: 1px solid #d5dfe5;
+  border-radius: 8px;
+  text-align: left;
+  font-size: 1rem;
+  cursor: pointer;
+}
+
+.print-options-list label:hover {
+  background: #f5f8fa;
+}
+
+.print-options-list label:has(input:checked) {
+  border-color: #2c5f7c;
+  background: #edf5f9;
+}
+
+.print-options-list label:focus-within {
+  outline: 2px solid #2c5f7c;
+  outline-offset: 2px;
+}
+
+.print-options-list input[type='radio'] {
+  flex-shrink: 0;
+  margin: 0;
+  accent-color: #2c5f7c;
+}
+
+.print-options-popup .swal2-actions {
+  margin-top: 24px;
+}

@@ -76,34 +76,35 @@ async function waitForPrintJob(
 async function selectPrintProfile(
   orderNumber?: string,
   orderCreated = false,
+  customerName?: string,
 ): Promise<PrinterProfile | undefined> {
   const result = await Swal.fire({
-    icon: orderCreated ? 'success' : 'question',
-    title: orderCreated ? 'Orden creada' : 'Impresión de orden',
-    text: orderCreated
-      ? `La orden ${orderNumber ?? ''} fue registrada. Selecciona una opción.`
-      : orderNumber
-        ? `Selecciona una opción para la orden ${orderNumber}.`
-        : 'Selecciona una opción de impresión.',
+    title: orderCreated ? 'Orden creada' : 'Imprimir orden',
+    text: [
+      orderNumber ? `N° de orden: ${orderNumber}` : 'Elige una opción',
+      customerName,
+    ].filter(Boolean).join('\n'),
+    customClass: {
+      popup: 'print-options-popup',
+      input: 'print-options-list',
+    },
     input: 'radio',
     inputOptions: {
-      none: 'No imprimir',
-      thermal_escpos: 'Ticket térmico (80 mm mediante Windows)',
-      system_pdf: 'Resumen normal (Letter)',
+      thermal_escpos: 'Ticket térmico · 80 mm',
+      system_pdf: 'Resumen · Carta',
     },
-    inputValue: 'none',
+    inputValue: 'thermal_escpos',
     inputValidator: (value) =>
       value ? undefined : 'Selecciona una opción para continuar.',
     showCancelButton: true,
-    confirmButtonText: 'Continuar',
-    cancelButtonText: 'Cerrar',
+    confirmButtonText: 'Imprimir',
+    cancelButtonText: 'Ahora no',
     confirmButtonColor: '#2c5f7c',
     cancelButtonColor: '#7f8c8d',
   })
 
   if (
     !result.isConfirmed ||
-    result.value === 'none' ||
     (result.value !== 'thermal_escpos' && result.value !== 'system_pdf')
   ) {
     return undefined
@@ -841,6 +842,7 @@ export default function ServiceOrdersPage() {
         const printerProfile = await selectPrintProfile(
           created.order.orderNumber,
           true,
+          resolveCustomerName(created.order.customerId, created.order.customerName),
         )
 
         if (printerProfile) {
@@ -865,7 +867,11 @@ export default function ServiceOrdersPage() {
   }
 
   const handlePrint = async (order: ServiceOrder) => {
-    const printerProfile = await selectPrintProfile(order.orderNumber)
+    const printerProfile = await selectPrintProfile(
+      order.orderNumber,
+      false,
+      resolveCustomerName(order.customerId, order.customerName),
+    )
     if (!printerProfile) {
       return
     }
