@@ -26,7 +26,7 @@ export default function QuickCustomerForm({
   const [formState, setFormState] = useState<CustomerPayload>(emptyCustomer)
   const [isSaving, setIsSaving] = useState(false)
   const [errorMessage, setErrorMessage] = useState('')
-  const rutIsInvalid = Boolean(formState.rut) && !isValidChileanRut(formState.rut ?? '')
+  const rutIsInvalid = Boolean(formState.rut?.trim()) && !isValidChileanRut(formState.rut ?? '')
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -42,7 +42,7 @@ export default function QuickCustomerForm({
     event.preventDefault()
     setErrorMessage('')
 
-    if (!formState.rut || !isValidChileanRut(formState.rut)) {
+    if (formState.rut?.trim() && !isValidChileanRut(formState.rut)) {
       setErrorMessage('Ingresa un RUT chileno válido con su dígito verificador.')
       return
     }
@@ -51,8 +51,8 @@ export default function QuickCustomerForm({
     try {
       await onCreate({
         name: formState.name.trim(),
-        rut: normalizeChileanRut(formState.rut),
-        email: formState.email.trim(),
+        rut: formState.rut?.trim() ? normalizeChileanRut(formState.rut) : undefined,
+        email: formState.email?.trim() || undefined,
         phone: formState.phone?.trim() || undefined,
         address: formState.address?.trim() || undefined,
       })
@@ -98,7 +98,7 @@ export default function QuickCustomerForm({
             />
           </label>
           <label className="field">
-            <span>RUT</span>
+            <span>RUT (opcional)</span>
             <input
               type="text"
               value={formState.rut ?? ''}
@@ -112,7 +112,6 @@ export default function QuickCustomerForm({
                 }))
               }
               placeholder="12.345.678-5"
-              required
               aria-invalid={rutIsInvalid}
             />
             {rutIsInvalid && (
@@ -120,18 +119,17 @@ export default function QuickCustomerForm({
             )}
           </label>
           <label className="field">
-            <span>Email</span>
+            <span>Email (opcional)</span>
             <input
               type="email"
-              value={formState.email}
+              value={formState.email ?? ''}
               onChange={(event) =>
                 setFormState((previous) => ({ ...previous, email: event.target.value }))
               }
-              required
             />
           </label>
           <label className="field">
-            <span>Teléfono</span>
+            <span>Teléfono (opcional)</span>
             <input
               type="tel"
               value={formState.phone ?? ''}
@@ -141,7 +139,7 @@ export default function QuickCustomerForm({
             />
           </label>
           <label className="field field-full">
-            <span>Dirección</span>
+            <span>Dirección (opcional)</span>
             <input
               type="text"
               value={formState.address ?? ''}

@@ -85,7 +85,7 @@ export default function CustomerForm({
    */
   const handleValidationAndSubmit = (event: FormEvent<HTMLFormElement>) => {
     const rut = formState.rut?.trim() ?? ''
-    if ((!isEditing && !rut) || (rut && !isValidChileanRut(rut))) {
+    if (rut && !isValidChileanRut(rut)) {
       event.preventDefault()
       void Swal.fire({
         icon: 'warning',
@@ -134,7 +134,7 @@ export default function CustomerForm({
             />
           </label>
           <label className="field">
-            <span>RUT</span>
+            <span>RUT (opcional)</span>
             <input
               type="text"
               inputMode="text"
@@ -150,7 +150,6 @@ export default function CustomerForm({
                 }))
               }
               placeholder="12.345.678-5"
-              required={!isEditing}
               aria-invalid={Boolean(formState.rut) && !isValidChileanRut(formState.rut ?? '')}
             />
             {formState.rut && !isValidChileanRut(formState.rut) && (
@@ -158,16 +157,15 @@ export default function CustomerForm({
             )}
           </label>
           <label className="field">
-            <span>Email</span>
+            <span>Email (opcional)</span>
             <input
               type="email"
-              value={formState.email}
+              value={formState.email ?? ''}
               onChange={(event) => setFormState((prev) => ({ ...prev, email: event.target.value }))}
-              required
             />
           </label>
           <label className="field">
-            <span>Telefono</span>
+            <span>Teléfono (opcional)</span>
             <input
               type="text"
               value={formState.phone ?? ''}
@@ -175,7 +173,7 @@ export default function CustomerForm({
             />
           </label>
           <label className="field">
-            <span>Direccion</span>
+            <span>Dirección (opcional)</span>
             <input
               type="text"
               value={formState.address ?? ''}

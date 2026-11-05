@@ -59,7 +59,7 @@ export function useCustomers(canChangeStatus = false) {
   const normalizePayload = useCallback(
     (state: CustomerPayload) => ({
       name: state.name.trim(),
-      email: state.email.trim(),
+      email: state.email?.trim() || undefined,
       rut: state.rut?.trim() ? normalizeChileanRut(state.rut) : undefined,
       phone: state.phone?.trim() || undefined,
       address: state.address?.trim() || undefined,
@@ -79,7 +79,7 @@ export function useCustomers(canChangeStatus = false) {
     }
     return {
       name: selectedCustomer.name,
-      email: selectedCustomer.email,
+      email: selectedCustomer.email?.trim() || undefined,
       rut: selectedCustomer.rut
         ? normalizeChileanRut(selectedCustomer.rut)
         : undefined,
@@ -115,7 +115,7 @@ export function useCustomers(canChangeStatus = false) {
     return customers.filter((customer) => {
       return (
         customer.name.toLowerCase().includes(normalized) ||
-        customer.email.toLowerCase().includes(normalized) ||
+        (customer.email ?? '').toLowerCase().includes(normalized) ||
         (customer.rut ?? '').toLowerCase().includes(normalized) ||
         (customer.phone ?? '').toLowerCase().includes(normalized)
       )
@@ -156,7 +156,7 @@ export function useCustomers(canChangeStatus = false) {
     setSelectedCustomer(customer)
     setFormState({
       name: customer.name,
-      email: customer.email,
+      email: customer.email ?? '',
       rut: customer.rut ?? '',
       phone: customer.phone ?? '',
       address: customer.address ?? '',

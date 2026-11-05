@@ -1,5 +1,6 @@
 import axios, { type AxiosRequestConfig } from 'axios'
 import { getSession } from '../auth/session.ts'
+import { requestLoadingTitle, startLoadingAlert } from '../ui/loadingAlert.ts'
 
 export class ApiError extends Error {
   readonly status?: number
@@ -21,6 +22,8 @@ const axiosInstance = axios.create({
   baseURL: import.meta.env.VITE_SERVER_URL || 'http://localhost:3500',
 })
 
+const finishLoadingByRequest = new WeakMap<object, () => void>()
+
 // Interceptamos peticiones para inyectar automáticamente el Bearer token si no se desactiva
 axiosInstance.interceptors.request.use(
   (config) => {
@@ -32,6 +35,8 @@ axiosInstance.interceptors.request.use(
         config.headers.Authorization = `Bearer ${session.token}`
       }
     }
+    const title = requestLoadingTitle(config.method ?? 'get', config.url ?? '')
+    if (title) finishLoadingByRequest.set(config, startLoadingAlert(title))
     return config
   },
   (error) => {
@@ -42,9 +47,15 @@ axiosInstance.interceptors.request.use(
 // Interceptamos respuestas para formatear el mensaje de error de forma consistente
 axiosInstance.interceptors.response.use(
   (response) => {
+    finishLoadingByRequest.get(response.config)?.()
+    finishLoadingByRequest.delete(response.config)
     return response
   },
   (error) => {
+    if (error.config) {
+      finishLoadingByRequest.get(error.config)?.()
+      finishLoadingByRequest.delete(error.config)
+    }
     const errorBody = error.response?.data as { message?: string } | undefined
     const message = errorBody?.message ?? error.message ?? 'Ocurrio un error al procesar la solicitud.'
     return Promise.reject(new ApiError(message, error.response?.status))

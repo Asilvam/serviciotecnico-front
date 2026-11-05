@@ -1060,6 +1060,7 @@
 }
 
 .field {
+  align-content: start;
   display: grid;
   gap: 8px;
 }
@@ -1092,6 +1093,24 @@
 
 .field-label-actions label {
   font-weight: 600;
+}
+
+.form-section .field > span,
+.form-section .field-label-actions {
+  display: flex;
+  align-items: center;
+  min-height: 38px;
+}
+
+.field-label-actions .btn {
+  flex-shrink: 0;
+  height: 38px;
+  white-space: nowrap;
+}
+
+.field input,
+.field select {
+  height: 48px;
 }
 
 .customer-rut {
@@ -1301,18 +1320,4 @@
   justify-content: center;
   gap: 12px;
   min-height: 120px;
-}
-
-.list-loading-spinner {
-  flex: 0 0 auto;
-  width: 24px;
-  height: 24px;
-  border-width: 3px;
-  color: var(--accent);
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .list-loading-spinner {
-    animation: none;
-  }
 }
