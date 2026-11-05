@@ -1,3 +1,4 @@
+import ListLoadingState from '../components/ListLoadingState.tsx'
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react'
 import Swal from 'sweetalert2'
 import AdminLayout from '../components/AdminLayout.tsx'
@@ -351,9 +352,7 @@ export default function UsersPage() {
       )}
 
       {hasAdminAccess !== false && status === 'loading' && (
-        <div className="state-card">
-          <p>Cargando usuarios...</p>
-        </div>
+        <ListLoadingState label="Cargando usuarios..." />
       )}
 
       {hasAdminAccess !== false && status === 'error' && (

@@ -1207,6 +1207,23 @@
   }
 }
 
+/* Desktop pages follow their content instead of stretching to viewport height. */
+@media (min-width: 1025px) {
+  .app-shell {
+    min-height: auto;
+  }
+
+  .main-content {
+    flex: none;
+    align-items: flex-start;
+    padding-block: 40px;
+  }
+
+  .home-hero {
+    align-items: center;
+  }
+}
+
 @media (min-width: 1280px) {
   .panel {
     padding: 34px;
@@ -1275,4 +1292,27 @@
 
 .print-options-popup .swal2-actions {
   margin-top: 24px;
+}
+
+
+.list-loading-state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  min-height: 120px;
+}
+
+.list-loading-spinner {
+  flex: 0 0 auto;
+  width: 24px;
+  height: 24px;
+  border-width: 3px;
+  color: var(--accent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .list-loading-spinner {
+    animation: none;
+  }
 }

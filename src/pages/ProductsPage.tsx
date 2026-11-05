@@ -1,3 +1,4 @@
+import ListLoadingState from '../components/ListLoadingState.tsx'
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react'
 import Swal from 'sweetalert2'
 import AdminLayout from '../components/AdminLayout.tsx'
@@ -279,9 +280,7 @@ export default function ProductsPage() {
       </div>
 
       {status === 'loading' && (
-        <div className="state-card">
-          <p>Cargando productos...</p>
-        </div>
+        <ListLoadingState label="Cargando productos..." />
       )}
 
       {status === 'error' && (

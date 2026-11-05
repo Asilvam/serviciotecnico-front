@@ -1,3 +1,4 @@
+import ListLoadingState from '../components/ListLoadingState.tsx'
 import { useCallback, useEffect, useMemo, useState, type ComponentProps } from 'react'
 import Swal from 'sweetalert2'
 import AdminLayout from '../components/AdminLayout.tsx'
@@ -1053,9 +1054,7 @@ export default function ServiceOrdersPage() {
       </div>
 
       {status === 'loading' && (
-        <div className="state-card">
-          <p>Cargando ordenes de servicio...</p>
-        </div>
+        <ListLoadingState label="Cargando órdenes de servicio..." />
       )}
 
       {status === 'error' && (

@@ -1,3 +1,4 @@
+import ListLoadingState from '../components/ListLoadingState.tsx'
 import AdminLayout from '../components/AdminLayout.tsx'
 import { useCustomers } from './customers/useCustomers.ts'
 import CustomerTable from './customers/CustomerTable.tsx'
@@ -53,9 +54,7 @@ export default function CustomersPage() {
       </div>
 
       {status === 'loading' && (
-        <div className="state-card">
-          <p>Cargando clientes...</p>
-        </div>
+        <ListLoadingState label="Cargando clientes..." />
       )}
 
       {status === 'error' && (
