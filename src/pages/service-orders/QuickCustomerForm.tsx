@@ -1,3 +1,4 @@
+import { formatCustomerName } from '../../utils/customerName.ts'
 import { useEffect, useState, type FormEvent } from 'react'
 import type { CustomerPayload } from '../../types/customers.ts'
 import {
@@ -50,7 +51,7 @@ export default function QuickCustomerForm({
     setIsSaving(true)
     try {
       await onCreate({
-        name: formState.name.trim(),
+        name: formatCustomerName(formState.name),
         rut: formState.rut?.trim() ? normalizeChileanRut(formState.rut) : undefined,
         email: formState.email?.trim() || undefined,
         phone: formState.phone?.trim() || undefined,
@@ -89,6 +90,10 @@ export default function QuickCustomerForm({
             <span>Nombre completo</span>
             <input
               type="text"
+              autoComplete="name"
+              onBlur={() =>
+                setFormState((previous) => ({ ...previous, name: formatCustomerName(previous.name) }))
+              }
               value={formState.name}
               onChange={(event) =>
                 setFormState((previous) => ({ ...previous, name: event.target.value }))

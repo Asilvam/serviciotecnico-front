@@ -1,3 +1,4 @@
+import { formatCustomerName } from '../../utils/customerName.ts'
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react'
 import Swal from 'sweetalert2'
 import { customersApi } from '../../api/customersApi.ts'
@@ -58,7 +59,7 @@ export function useCustomers(canChangeStatus = false) {
    */
   const normalizePayload = useCallback(
     (state: CustomerPayload) => ({
-      name: state.name.trim(),
+      name: formatCustomerName(state.name),
       email: state.email?.trim() || undefined,
       rut: state.rut?.trim() ? normalizeChileanRut(state.rut) : undefined,
       phone: state.phone?.trim() || undefined,
@@ -78,7 +79,7 @@ export function useCustomers(canChangeStatus = false) {
       return null
     }
     return {
-      name: selectedCustomer.name,
+      name: formatCustomerName(selectedCustomer.name),
       email: selectedCustomer.email?.trim() || undefined,
       rut: selectedCustomer.rut
         ? normalizeChileanRut(selectedCustomer.rut)

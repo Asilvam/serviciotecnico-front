@@ -1,3 +1,4 @@
+import { formatCustomerName } from '../../utils/customerName.ts'
 import { useEffect, type FormEvent } from 'react'
 import Swal from 'sweetalert2'
 import type { Customer, CustomerPayload } from '../../types/customers.ts'
@@ -128,6 +129,10 @@ export default function CustomerForm({
             <span>Nombre completo</span>
             <input
               type="text"
+              autoComplete="name"
+              onBlur={() =>
+                setFormState((previous) => ({ ...previous, name: formatCustomerName(previous.name) }))
+              }
               value={formState.name}
               onChange={(event) => setFormState((prev) => ({ ...prev, name: event.target.value }))}
               required
