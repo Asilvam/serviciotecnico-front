@@ -19,6 +19,7 @@ type RequestOptions = {
   bypassCache?: boolean
   loading?: 'dialog' | 'silent'
   signal?: AbortSignal
+  onNetworkStart?: () => void
 }
 
 const axiosInstance = axios.create({
@@ -110,6 +111,7 @@ export const apiClient = {
       signal: options.signal,
       requiresAuth: options.requiresAuth,
     }
+    options.onNetworkStart?.()
     const response = await axiosInstance.get<T>(path, config)
     getCache.set(cacheKey, { data: response.data, expiresAt: Date.now() + (options.cacheTtlMs ?? CACHE_TTL) })
     return response.data
