@@ -37,7 +37,9 @@ export default function SearchSelect(props: Props) {
   const trigger = useRef<HTMLButtonElement>(null)
   const search = useRef<HTMLInputElement>(null)
   const list = useRef<HTMLDivElement>(null)
+  const popup = useRef<HTMLDivElement>(null)
   const [open, setOpen] = useState(false)
+  const [menuLayout, setMenuLayout] = useState({ above: false, listHeight: 320, left: 0, top: 0, width: 0 })
   const [query, setQuery] = useState('')
   const [active, setActive] = useState(0)
   const [invalid, setInvalid] = useState(false)
@@ -57,6 +59,17 @@ export default function SearchSelect(props: Props) {
     setActive(0)
   }
   const show = () => {
+    if (root.current) {
+      const rect = trigger.current!.getBoundingClientRect()
+      const top = 8
+      const bottom = window.innerHeight - 8
+      const below = bottom - rect.bottom - 5
+      const above = rect.top - top - 5
+      const overhead = props.searchable === false ? 16 : 72
+      const desired = Math.min(320, window.innerHeight * .35, props.options.length * 42) + overhead
+      const opensAbove = below < desired && above > below
+      setMenuLayout({ left: rect.left, top: opensAbove ? window.innerHeight - rect.top + 5 : rect.bottom + 5, width: rect.width, above: opensAbove, listHeight: Math.max(40, Math.min(320, window.innerHeight * .35, (opensAbove ? above : below) - overhead)) })
+    }
     setOpen(true)
     setQuery('')
     setActive(0)
@@ -69,6 +82,7 @@ export default function SearchSelect(props: Props) {
   }
   useEffect(() => {
     if (open) {
+      popup.current?.showPopover()
       if (props.searchable === false) list.current?.focus()
       else search.current?.focus()
     }
@@ -115,7 +129,7 @@ export default function SearchSelect(props: Props) {
   }
   return (
     <div
-      className="field search-select"
+      className={`field search-select${open ? ' is-open' : ''}`}
       ref={root}
       onBlur={(event) => {
         if (!event.currentTarget.contains(event.relatedTarget)) close()
@@ -180,7 +194,7 @@ export default function SearchSelect(props: Props) {
       )}
       {invalid && <small role="alert">{props.placeholder}.</small>}
       {open && !props.disabled && (
-        <div className="search-select-popup">
+        <div ref={popup} popover="manual" className="search-select-popup" style={{ left: menuLayout.left, width: menuLayout.width, top: menuLayout.above ? 'auto' : menuLayout.top, bottom: menuLayout.above ? menuLayout.top : 'auto', '--select-list-height': `${menuLayout.listHeight}px` } as React.CSSProperties}>
           {props.searchable !== false && (
             <input
               ref={search}

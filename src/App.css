@@ -1393,3 +1393,10 @@
 .order-state-filter:focus-visible { outline: 2px solid #39748e; outline-offset: 2px; }
 .order-state-count { display: inline-flex; justify-content: center; align-items: center; min-width: 20px; min-height: 20px; padding: 0 4px; border-radius: 999px; background: #edf1f3; font-size: .75rem; }
 .order-state-filter.is-selected .order-state-count { background: #39748e; color: #fff; }
+
+.search-select.is-open { z-index: 5; }
+.search-select-popup.opens-above { top: auto; bottom: 100%; margin-top: 0; margin-bottom: 5px; }
+.search-select-popup .search-select-list { max-height: var(--select-list-height, min(320px, 35vh)); }
+
+/* Top-layer menus escape modal clipping without changing form layout. */
+.search-select-popup[popover] { position: fixed !important; right: auto; margin: 0 !important; box-sizing: border-box; }

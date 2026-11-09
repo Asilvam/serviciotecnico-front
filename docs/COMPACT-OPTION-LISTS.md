@@ -23,3 +23,7 @@ El selector de productos sí incluye buscador integrado, igual que Marca. Filtra
 El menú de productos es flotante con altura máxima y scroll interno; no expande la tarjeta.
 
 Se corrigió también la capa del contenedor de SweetAlert2 para que sus botones no queden por encima del menú. Selección y cierre comprobados visualmente.
+
+## Menús fuera del recorte del modal
+
+El selector compartido usa un popover manual en la capa superior del navegador. Se ancla al campo sin ocupar espacio del formulario y puede solapar botones y salir del contenedor. Su altura depende del espacio de pantalla, con scroll interno. Solo abre hacia arriba si falta espacio en la pantalla, no por el borde del modal. Verificado en edición de técnico: menú completo, selección y cierre, sin guardar datos.
