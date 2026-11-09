@@ -1342,3 +1342,25 @@
 .search-select-validation { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
 .search-select-trigger.is-invalid { border-color: #d73939; }
 .device-selector-link { padding: 0; border: 0; background: transparent; color: var(--primary-color, #2c6884); font: inherit; font-size: .9rem; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
+
+/* Order numbers stay intact; status is visible and actionable by permission. */
+.service-orders-table { overflow-x: auto; }
+.service-orders-table table { min-width: 950px; }
+.service-orders-table th, .service-orders-table td { padding: 13px 12px; }
+.service-orders-table .col-order { min-width: 184px; }
+.service-orders-table .order-number { white-space: nowrap; font-size: .92rem; font-variant-numeric: tabular-nums; }
+.service-orders-table .cell-date { white-space: nowrap; }
+.order-status-filter { display: grid; gap: 8px; min-width: 200px; }
+.order-status-filter > span { font-size: .9rem; color: var(--text-muted); }
+.order-status-filter select { min-height: 44px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-elevated); color: var(--text); font: inherit; }
+.order-state { --state-color: #425b70; --state-bg: #e8eef3; display: inline-flex; align-items: center; gap: 7px; min-height: 32px; padding: 6px 10px; border: 1px solid transparent; border-radius: 999px; color: var(--state-color); background: var(--state-bg); font-size: .78rem; font-weight: 600; white-space: nowrap; line-height: 1.2; }
+.order-state--in_progress { --state-color: #155b9b; --state-bg: #e5effb; }
+.order-state--waiting_parts { --state-color: #805414; --state-bg: #fff1d7; }
+.order-state--completed { --state-color: #176647; --state-bg: #e3f3e9; }
+.order-state--delivered { --state-color: #514487; --state-bg: #eeeafa; }
+.order-state--cancelled { --state-color: #943b3b; --state-bg: #fbe8e8; }
+.order-state-dot { width: 6px; height: 6px; flex-shrink: 0; border-radius: 50%; background: currentColor; }
+.order-state-editable { cursor: pointer; border-color: color-mix(in srgb, var(--state-color) 22%, transparent); }
+.order-state-editable:hover { filter: brightness(.96); }
+.order-state-editable:focus-visible { outline: 2px solid var(--state-color); outline-offset: 2px; }
+.order-state-editable:disabled { opacity: .65; cursor: wait; }

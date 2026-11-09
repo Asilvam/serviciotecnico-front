@@ -1,3 +1,4 @@
+import { orderStatusLabels as statusLabels, orderStatusOptions, technicianStatusTransitions } from '../utils/orderStatusOptions.ts'
 import DeviceSelector from '../components/DeviceSelector.tsx'
 import ListLoadingState from '../components/ListLoadingState.tsx'
 import { useCallback, useEffect, useMemo, useState, type ComponentProps } from 'react'
@@ -30,15 +31,6 @@ import {
   toCalendarDateInput,
 } from '../utils/chileDateTime.ts'
 import { formatChileanRut } from '../utils/chileanRut.ts'
-
-const statusLabels: Record<ServiceOrderStatus, string> = {
-  pending: 'Pendiente',
-  in_progress: 'En proceso',
-  waiting_parts: 'Espera repuestos',
-  completed: 'Completada',
-  delivered: 'Entregada',
-  cancelled: 'Cancelada',
-}
 
 const priorityLabels: Record<ServiceOrderPriority, string> = {
   low: 'Baja',
@@ -229,12 +221,6 @@ const escapeHtml = (value: string): string =>
       character,
   )
 
-const technicianStatusTransitions: Partial<Record<ServiceOrderStatus, ServiceOrderStatus[]>> = {
-  pending: ['in_progress'],
-  in_progress: ['waiting_parts', 'completed'],
-  waiting_parts: ['in_progress', 'completed'],
-}
-
 const selectChangedFields = (
   current: UpdateServiceOrderPayload,
   initial: UpdateServiceOrderPayload,
@@ -259,6 +245,8 @@ export default function ServiceOrdersPage() {
   const [status, setStatus] = useState<'idle' | 'loading' | 'error'>('loading')
   const [errorMessage, setErrorMessage] = useState('')
   const [query, setQuery] = useState('')
+  const [statusFilter, setStatusFilter] = useState<ServiceOrderStatus | 'all'>('all')
+  const [statusChangingId, setStatusChangingId] = useState<string | null>(null)
   const [panelOpen, setPanelOpen] = useState(false)
   const [quickCustomerOpen, setQuickCustomerOpen] = useState(false)
   const [formState, setFormState] = useState<ServiceOrderFormState>(emptyOrder)
@@ -288,21 +276,7 @@ export default function ServiceOrdersPage() {
     : canEditIntake || canEditManagement || canEditTechnical || canEditLaborCost || canChangeStatus
   const isReadOnly = isEditing && !canSubmit
 
-  const availableStatuses = useMemo(() => {
-    if (!selectedOrder) return []
-    if (isAdmin) {
-      return (Object.keys(statusLabels) as ServiceOrderStatus[]).filter(
-        (statusValue) => statusValue !== 'cancelled' || selectedStatus === 'cancelled',
-      )
-    }
-    if (isReceptionist && selectedStatus === 'completed') {
-      return ['completed', 'delivered'] as ServiceOrderStatus[]
-    }
-    if (isTechnician) {
-      return [selectedStatus, ...(technicianStatusTransitions[selectedStatus] ?? [])]
-    }
-    return [selectedStatus]
-  }, [isAdmin, isReceptionist, isTechnician, selectedOrder, selectedStatus])
+  const availableStatuses = useMemo(() => selectedOrder ? orderStatusOptions(role, selectedStatus) : [], [role, selectedOrder, selectedStatus])
 
   const resolveOrderId = (order: ServiceOrder) => order.id ?? order._id ?? ''
   const resolveCustomerId = (customer: Customer) => customer.id ?? customer._id ?? ''
@@ -634,10 +608,11 @@ export default function ServiceOrdersPage() {
 
   const filteredOrders = useMemo(() => {
     const normalized = query.trim().toLowerCase()
+    const matchingStatus = orders.filter(order => statusFilter === 'all' || (order.status ?? 'pending') === statusFilter)
     if (!normalized) {
-      return orders
+      return matchingStatus
     }
-    return orders.filter((order) => {
+    return matchingStatus.filter((order) => {
       const statusLabel = statusLabels[order.status ?? 'pending'].toLowerCase()
       const priorityLabel = priorityLabels[order.priority ?? 'medium'].toLowerCase()
       const customerName = resolveCustomerName(order.customerId, order.customerName).toLowerCase()
@@ -655,7 +630,7 @@ export default function ServiceOrdersPage() {
           priorityLabel.includes(normalized)
       )
     })
-  }, [orders, query, customersById, resolveCustomerName, resolveTechnicianName])
+  }, [orders, query, statusFilter, customersById, resolveCustomerName, resolveTechnicianName])
 
   const itemsTotal = useMemo(() => {
     return (formState.items ?? []).reduce((sum, item) => {
@@ -953,6 +928,45 @@ export default function ServiceOrdersPage() {
     }
   }
 
+  const handleStatusChange = async (order: ServiceOrder) => {
+    const orderId = resolveOrderId(order)
+    const current = order.status ?? 'pending'
+    const choices = orderStatusOptions(role, current).filter(value => value !== current)
+    if (!orderId || !choices.length || statusChangingId) return
+    setStatusChangingId(orderId)
+    try {
+      const result = await Swal.fire<ServiceOrder>({
+        title: 'Cambiar estado de la OT',
+        html: `<strong>${escapeHtml(order.orderNumber || 'Orden de servicio')}</strong><br>Estado actual: ${statusLabels[current]}<br><small>Al completar o entregar la orden, se limitará su edición según tu rol.</small>`,
+        input: 'select',
+        inputOptions: Object.fromEntries(choices.map(value => [value, statusLabels[value]])),
+        inputPlaceholder: 'Selecciona el nuevo estado',
+        inputLabel: 'Nuevo estado',
+        inputValidator: value => value ? undefined : 'Selecciona el nuevo estado.',
+        showCancelButton: true,
+        confirmButtonText: 'Guardar estado',
+        cancelButtonText: 'Volver',
+        showLoaderOnConfirm: true,
+        allowOutsideClick: () => !Swal.isLoading(),
+        preConfirm: async (value: string) => {
+          try {
+            return await serviceOrdersApi.update(orderId, { status: value as ServiceOrderStatus })
+          } catch (error) {
+            Swal.showValidationMessage(error instanceof Error ? error.message : 'No se pudo actualizar el estado.')
+            return false
+          }
+        },
+      })
+      if (result.isConfirmed && result.value) {
+        const updated = result.value
+        setOrders(previous => previous.map(item => resolveOrderId(item) === orderId ? { ...item, ...updated } : item))
+        void Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: 'Estado actualizado', timer: 1800, showConfirmButton: false })
+      }
+    } finally {
+      setStatusChangingId(null)
+    }
+  }
+
   const handlePermanentDelete = async (order: ServiceOrder) => {
     const orderId = resolveOrderId(order)
     if (!orderId) {
@@ -1057,6 +1071,13 @@ export default function ServiceOrdersPage() {
             onChange={(event) => setQuery(event.target.value)}
           />
         </label>
+        <label className="order-status-filter">
+          <span>Estado de la OT</span>
+          <select value={statusFilter} onChange={event => setStatusFilter(event.target.value as ServiceOrderStatus | 'all')}>
+            <option value="all">Todos los estados ({orders.length})</option>
+            {(Object.keys(statusLabels) as ServiceOrderStatus[]).map(value => <option key={value} value={value}>{statusLabels[value]} ({orders.filter(order => (order.status ?? 'pending') === value).length})</option>)}
+          </select>
+        </label>
         <button className="btn btn-ghost" type="button" onClick={loadOrders}>
           Actualizar lista
         </button>
@@ -1077,20 +1098,21 @@ export default function ServiceOrdersPage() {
 
       {status === 'idle' && filteredOrders.length === 0 && (
         <div className="state-card">
-          <p>{isTechnician ? 'No tienes ordenes asignadas.' : 'No hay ordenes de servicio activas.'}</p>
-          {canCreate && <button className="btn btn-secondary" type="button" onClick={openCreatePanel}>
+          <p>{orders.length ? 'No hay órdenes que coincidan con los filtros.' : isTechnician ? 'No tienes ordenes asignadas.' : 'No hay ordenes de servicio activas.'}</p>
+          {orders.length > 0 && <button className="btn btn-ghost" type="button" onClick={() => { setQuery(''); setStatusFilter('all') }}>Limpiar filtros</button>}
+          {canCreate && !orders.length && <button className="btn btn-secondary" type="button" onClick={openCreatePanel}>
             Crear primera orden
           </button>}
         </div>
       )}
 
       {status === 'idle' && filteredOrders.length > 0 && (
-        <div className="table-card">
+        <div className="table-card service-orders-table">
           <table>
             <thead>
               <tr>
                 <th>Creacion</th>
-                <th>Orden</th>
+                <th className="col-order">Orden</th>
                 <th>Equipo</th>
                 <th className="col-status">Estado</th>
                 <th>Prioridad</th>
@@ -1102,8 +1124,8 @@ export default function ServiceOrdersPage() {
               {filteredOrders.map((order) => (
                 <tr key={resolveOrderId(order) || `${order.customerId}-${order.deviceType}`}>
                   <td className="cell-date">{formatChileDate(order.createdAt)}</td>
-                  <td>
-                    <div className="cell-title">{order.orderNumber || 'Sin folio'}</div>
+                  <td className="col-order">
+                    <div className="cell-title order-number">{order.orderNumber || 'Sin folio'}</div>
                     <span className="cell-subtitle">
                       {resolveCustomerName(order.customerId, order.customerName)}
                     </span>
@@ -1113,11 +1135,12 @@ export default function ServiceOrdersPage() {
                     <span className="cell-subtitle">{order.deviceBrand}</span>
                   </td>
                   <td className="col-status">
-                    <span
-                      className={`badge ${order.status === 'cancelled' ? 'badge-cancelled' : ''}`}
-                    >
-                      {statusLabels[order.status ?? 'pending']}
-                    </span>
+                    {orderStatusOptions(role, order.status ?? 'pending').some(value => value !== (order.status ?? 'pending')) ? (
+                      <button type="button" className={`order-state order-state--${order.status ?? 'pending'} order-state-editable`} disabled={Boolean(statusChangingId)} onClick={() => { void handleStatusChange(order) }} aria-label={`Cambiar estado de ${order.orderNumber || 'la orden'}. Estado actual: ${statusLabels[order.status ?? 'pending']}`} title="Cambiar estado de la orden">
+                        <span className="order-state-dot" aria-hidden="true" />{statusLabels[order.status ?? 'pending']}<span aria-hidden="true">▾</span>
+                      </button>
+                    ) : <span className={`order-state order-state--${order.status ?? 'pending'}`}><span className="order-state-dot" aria-hidden="true" />{statusLabels[order.status ?? 'pending']}</span>}
+
                   </td>
                   <td>{priorityLabels[order.priority ?? 'medium']}</td>
                   <td>${(order.totalCost ?? 0).toLocaleString('es-CL')}</td>
