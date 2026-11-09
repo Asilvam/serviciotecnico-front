@@ -13,11 +13,29 @@ export const serviceOrdersApi = {
   list() {
     return apiClient.get<ServiceOrder[]>('/service-orders')
   },
-  create(payload: CreateServiceOrderPayload) {
-    return apiClient.post<ServiceOrderCreateResponse>('/service-orders', payload)
+  async create(payload: CreateServiceOrderPayload) {
+    const result = await apiClient.post<ServiceOrderCreateResponse>(
+      '/service-orders',
+      payload,
+    )
+    if (
+      !payload.deviceBrandId ||
+      (payload.deviceModel && !payload.deviceModelId)
+    )
+      apiClient.invalidateCache('/device-catalog')
+    return result
   },
-  update(id: string, payload: UpdateServiceOrderPayload) {
-    return apiClient.patch<ServiceOrder>(`/service-orders/${id}`, payload)
+  async update(id: string, payload: UpdateServiceOrderPayload) {
+    const result = await apiClient.patch<ServiceOrder>(
+      `/service-orders/${id}`,
+      payload,
+    )
+    if (
+      (payload.deviceBrand && !payload.deviceBrandId) ||
+      (payload.deviceModel && !payload.deviceModelId)
+    )
+      apiClient.invalidateCache('/device-catalog')
+    return result
   },
   cancel(id: string) {
     return apiClient.delete<ServiceOrder>(`/service-orders/${id}`)
@@ -31,6 +49,8 @@ export const serviceOrdersApi = {
     })
   },
   getPrintJob(jobId: string) {
-    return apiClient.get<PrintJob>(`/print-jobs/${jobId}`, { bypassCache: true })
+    return apiClient.get<PrintJob>(`/print-jobs/${jobId}`, {
+      bypassCache: true,
+    })
   },
 }

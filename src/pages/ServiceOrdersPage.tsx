@@ -1,3 +1,4 @@
+import DeviceSelector from '../components/DeviceSelector.tsx'
 import ListLoadingState from '../components/ListLoadingState.tsx'
 import { useCallback, useEffect, useMemo, useState, type ComponentProps } from 'react'
 import Swal from 'sweetalert2'
@@ -196,7 +197,7 @@ type ServiceOrderFormState = CreateServiceOrderPayload & {
 const emptyOrder: ServiceOrderFormState = {
   customerId: '',
   technicianId: '',
-  deviceType: '',
+  deviceType: 'CELULAR',
   deviceBrand: '',
   deviceModel: '',
   serialNumber: '',
@@ -512,6 +513,8 @@ export default function ServiceOrdersPage() {
         payload.customerId = trimText(state.customerId)
         payload.deviceType = normalizeDeviceType(state.deviceType)
         payload.deviceBrand = trimText(state.deviceBrand)
+        payload.deviceBrandId = state.deviceBrandId ?? null
+        payload.deviceModelId = state.deviceModelId ?? null
         payload.deviceModel = trimText(state.deviceModel) || null
         payload.serialNumber = trimText(state.serialNumber) || null
         payload.problemDescription = trimText(state.problemDescription)
@@ -557,6 +560,8 @@ export default function ServiceOrdersPage() {
       technicianId: selectedOrder.technicianId ?? undefined,
       deviceType: selectedOrder.deviceType ?? '',
       deviceBrand: selectedOrder.deviceBrand ?? '',
+      deviceBrandId: selectedOrder.deviceBrandId ?? null,
+      deviceModelId: selectedOrder.deviceModelId ?? null,
       deviceModel: selectedOrder.deviceModel ?? undefined,
       serialNumber: selectedOrder.serialNumber ?? undefined,
       problemDescription: selectedOrder.problemDescription ?? '',
@@ -700,6 +705,8 @@ export default function ServiceOrdersPage() {
       technicianId: order.technicianId ?? '',
       deviceType: order.deviceType ?? '',
       deviceBrand: order.deviceBrand ?? '',
+      deviceBrandId: order.deviceBrandId ?? null,
+      deviceModelId: order.deviceModelId ?? null,
       deviceModel: order.deviceModel ?? '',
       serialNumber: order.serialNumber ?? '',
       problemDescription: order.problemDescription ?? '',
@@ -830,6 +837,8 @@ export default function ServiceOrdersPage() {
           technicianId: trimText(formState.technicianId) || undefined,
           deviceType: normalizedDeviceType,
           deviceBrand: trimText(formState.deviceBrand),
+          deviceBrandId: formState.deviceBrandId || undefined,
+          deviceModelId: formState.deviceModelId || undefined,
           deviceModel: trimText(formState.deviceModel) || undefined,
           serialNumber: trimText(formState.serialNumber) || undefined,
           problemDescription: trimText(formState.problemDescription),
@@ -1247,7 +1256,7 @@ export default function ServiceOrdersPage() {
                         list="device-type-suggestions"
                         value={formState.deviceType}
                         onChange={(event) => {
-                          setFormState((prev) => ({ ...prev, deviceType: event.target.value }))
+                          setFormState((prev) => ({ ...prev, deviceType: event.target.value, deviceBrandId: null, deviceModelId: null }))
                           if (deviceTypeError) {
                             setDeviceTypeError('')
                           }
@@ -1272,29 +1281,16 @@ export default function ServiceOrdersPage() {
                         ))}
                       </datalist>
                     </label>
-                    <label className="field">
-                      <span>Marca</span>
-                      <input
-                        type="text"
-                        value={formState.deviceBrand}
-                        onChange={(event) =>
-                          setFormState((prev) => ({ ...prev, deviceBrand: event.target.value }))
-                        }
-                        required
-                        disabled={!canEditIntake}
-                      />
-                    </label>
-                    <label className="field">
-                      <span>Modelo</span>
-                      <input
-                        type="text"
-                        value={formState.deviceModel ?? ''}
-                        onChange={(event) =>
-                          setFormState((prev) => ({ ...prev, deviceModel: event.target.value }))
-                        }
-                        disabled={!canEditIntake}
-                      />
-                    </label>
+                    <DeviceSelector
+                      key={selectedOrder ? resolveOrderId(selectedOrder) : 'new'}
+                      deviceType={formState.deviceType}
+                      deviceBrand={formState.deviceBrand}
+                      deviceModel={formState.deviceModel}
+                      deviceBrandId={formState.deviceBrandId}
+                      deviceModelId={formState.deviceModelId}
+                      disabled={!canEditIntake}
+                      onChange={(values) => setFormState((previous) => ({ ...previous, ...values, deviceModel: values.deviceModel ?? '' }))}
+                    />
                     <label className="field field-full">
                       <span>Numero de serie o IMEI</span>
                       <input

@@ -26,6 +26,8 @@ export type ServiceOrder = {
   technicianName?: string
   deviceType: string
   deviceBrand: string
+  deviceBrandId?: string | null
+  deviceModelId?: string | null
   deviceModel?: string
   serialNumber?: string
   problemDescription: string
@@ -49,6 +51,8 @@ export type CreateServiceOrderPayload = {
   technicianId?: string
   deviceType: string
   deviceBrand: string
+  deviceBrandId?: string | null
+  deviceModelId?: string | null
   deviceModel?: string
   serialNumber?: string
   problemDescription: string
@@ -62,6 +66,8 @@ export type UpdateServiceOrderPayload = {
   technicianId?: string | null
   deviceType?: string
   deviceBrand?: string
+  deviceBrandId?: string | null
+  deviceModelId?: string | null
   deviceModel?: string | null
   serialNumber?: string | null
   problemDescription?: string

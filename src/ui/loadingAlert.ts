@@ -44,6 +44,8 @@ export function requestLoadingTitle(method: string, path: string): string | unde
   if (path.startsWith('/print-jobs/')) return undefined
   if (path === '/auth/login') return 'Iniciando sesión…'
   if (path === '/auth/profile') return 'Validando permisos…'
+  if (method === 'get' && path.startsWith('/device-catalog/brands')) return 'Cargando marcas…'
+  if (method === 'get' && path.startsWith('/device-catalog/models')) return 'Cargando modelos…'
   if (path.startsWith('/tracking/')) return 'Consultando estado…'
   if (/\/print(?:-80mm)?$/.test(path)) return 'Enviando impresión…'
   if (method === 'delete') return 'Eliminando…'

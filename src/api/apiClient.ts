@@ -15,7 +15,10 @@ export class ApiError extends Error {
 type RequestOptions = {
   headers?: Record<string, string>
   requiresAuth?: boolean
+  cacheTtlMs?: number
   bypassCache?: boolean
+  loading?: 'dialog' | 'silent'
+  signal?: AbortSignal
 }
 
 const axiosInstance = axios.create({
@@ -36,7 +39,7 @@ axiosInstance.interceptors.request.use(
       }
     }
     const title = requestLoadingTitle(config.method ?? 'get', config.url ?? '')
-    if (title) finishLoadingByRequest.set(config, startLoadingAlert(title))
+    if (title && (config as AxiosRequestConfig & { loading?: string }).loading !== 'silent') finishLoadingByRequest.set(config, startLoadingAlert(title))
     return config
   },
   (error) => {
@@ -90,6 +93,7 @@ function invalidateCache(path: string) {
 }
 
 export const apiClient = {
+  invalidateCache,
   async get<T>(path: string, options: RequestOptions = {}): Promise<T> {
     const now = Date.now()
     const cacheKey = buildCacheKey(path, options)
@@ -100,19 +104,23 @@ export const apiClient = {
       }
     }
 
-    const config: AxiosRequestConfig & { requiresAuth?: boolean } = {
+    const config: AxiosRequestConfig & { requiresAuth?: boolean; loading?: 'dialog' | 'silent' } = {
       headers: options.headers,
+      loading: options.loading,
+      signal: options.signal,
       requiresAuth: options.requiresAuth,
     }
     const response = await axiosInstance.get<T>(path, config)
-    getCache.set(cacheKey, { data: response.data, expiresAt: now + CACHE_TTL })
+    getCache.set(cacheKey, { data: response.data, expiresAt: Date.now() + (options.cacheTtlMs ?? CACHE_TTL) })
     return response.data
   },
 
   async post<T>(path: string, body: unknown, options: RequestOptions = {}): Promise<T> {
     invalidateCache(path)
-    const config: AxiosRequestConfig & { requiresAuth?: boolean } = {
+    const config: AxiosRequestConfig & { requiresAuth?: boolean; loading?: 'dialog' | 'silent' } = {
       headers: options.headers,
+      loading: options.loading,
+      signal: options.signal,
       requiresAuth: options.requiresAuth,
     }
     const response = await axiosInstance.post<T>(path, body, config)
@@ -121,8 +129,10 @@ export const apiClient = {
 
   async patch<T>(path: string, body: unknown, options: RequestOptions = {}): Promise<T> {
     invalidateCache(path)
-    const config: AxiosRequestConfig & { requiresAuth?: boolean } = {
+    const config: AxiosRequestConfig & { requiresAuth?: boolean; loading?: 'dialog' | 'silent' } = {
       headers: options.headers,
+      loading: options.loading,
+      signal: options.signal,
       requiresAuth: options.requiresAuth,
     }
     const response = await axiosInstance.patch<T>(path, body, config)
@@ -131,8 +141,10 @@ export const apiClient = {
 
   async delete<T>(path: string, options: RequestOptions = {}): Promise<T> {
     invalidateCache(path)
-    const config: AxiosRequestConfig & { requiresAuth?: boolean } = {
+    const config: AxiosRequestConfig & { requiresAuth?: boolean; loading?: 'dialog' | 'silent' } = {
       headers: options.headers,
+      loading: options.loading,
+      signal: options.signal,
       requiresAuth: options.requiresAuth,
     }
     const response = await axiosInstance.delete<T>(path, config)
