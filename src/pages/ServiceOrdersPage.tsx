@@ -1,3 +1,5 @@
+import { createRoot, type Root } from 'react-dom/client'
+import SearchSelect from '../components/SearchSelect.tsx'
 import { orderStatusLabels as statusLabels, orderStatusOptions, technicianStatusTransitions } from '../utils/orderStatusOptions.ts'
 import DeviceSelector from '../components/DeviceSelector.tsx'
 import ListLoadingState from '../components/ListLoadingState.tsx'
@@ -28,6 +30,7 @@ import { hasCapability } from '../auth/capabilities.ts'
 import QuickCustomerForm from './service-orders/QuickCustomerForm.tsx'
 import {
   formatChileDate,
+  todayInChile,
   toCalendarDateInput,
 } from '../utils/chileDateTime.ts'
 import { formatChileanRut } from '../utils/chileanRut.ts'
@@ -231,6 +234,11 @@ const selectChangedFields = (
       .map((field) => [field, current[field]]),
   ) as UpdateServiceOrderPayload
 
+function ItemProductChoice({ options, onSelect }: { options: { id: string; name: string }[]; onSelect: (id: string) => void }) {
+  const [value, setValue] = useState('')
+  return <SearchSelect label="Producto" placeholder="Selecciona un producto" value={value} options={options} searchable allowClear={false} onSelect={option => { setValue(option?.id ?? ''); onSelect(option?.id ?? '') }} />
+}
+
 export default function ServiceOrdersPage() {
   const role = getSession()?.role
   const isAdmin = role === 'admin'
@@ -263,6 +271,12 @@ export default function ServiceOrdersPage() {
     ? canCreate
     : isAdmin ||
       (isReceptionist && ['pending', 'in_progress', 'waiting_parts'].includes(selectedStatus))
+  const activeTechnicians = technicians.filter(technician => technician.isActive !== false)
+  const singleTechnicianId = activeTechnicians.length === 1 ? activeTechnicians[0].id ?? activeTechnicians[0]._id ?? '' : ''
+  const effectiveTechnicianId = formState.technicianId || (canEditManagement ? singleTechnicianId : '')
+  const today = todayInChile()
+  const originalDeliveryDate = toCalendarDateInput(selectedOrder?.estimatedDelivery)
+  const keepingHistoricalDate = Boolean(selectedOrder && originalDeliveryDate && originalDeliveryDate < today && formState.estimatedDelivery === originalDeliveryDate)
   const canEditTechnical =
     isEditing && (isAdmin || (isTechnician && !['completed', 'delivered', 'cancelled'].includes(selectedStatus)))
   const canEditLaborCost = isEditing && isAdmin
@@ -344,27 +358,15 @@ export default function ServiceOrdersPage() {
       return
     }
 
-    const options = products
-      .map((product) => {
-        const id = resolveProductId(product)
-        const availability =
-          product.type === 'service' ? 'Servicio' : `Stock: ${product.stock ?? 0}`
-        const label = `${product.name} (${product.sku}) - ${availability} - $${product.price.toLocaleString('es-CL')}`
-        return `<option value="${escapeHtml(id)}">${escapeHtml(label)}</option>`
-      })
-      .join('')
+    const options = products.map(product => ({ id: resolveProductId(product), name: product.name }))
+    let selectedProductId = ''
+    let productRoot: Root | undefined
 
     const result = await Swal.fire({
       title: 'Agregar item',
       html: `
         <div class="swal-form-grid">
-          <label class="swal-form-field full">
-            <span>Producto</span>
-            <select id="item-product" class="swal2-select">
-              <option value="">Selecciona un producto</option>
-              ${options}
-            </select>
-          </label>
+          <div id="item-product-root" class="swal-form-field full"></div>
           <div class="swal-form-row">
             <label class="swal-form-field">
               <span>Cantidad</span>
@@ -385,21 +387,17 @@ export default function ServiceOrdersPage() {
       confirmButtonText: 'Agregar',
       cancelButtonText: 'Cancelar',
       didOpen: () => {
-        const productSelect = document.getElementById('item-product') as HTMLSelectElement | null
-        const qtyInput = document.getElementById('item-qty') as HTMLInputElement | null
-        if (!productSelect || !qtyInput) {
-          return
+        const host = document.getElementById('item-product-root')
+        if (host) {
+          productRoot = createRoot(host)
+          productRoot.render(<ItemProductChoice options={options} onSelect={id => { selectedProductId = id }} />)
         }
-        productSelect.addEventListener('change', () => {
-          qtyInput.focus()
-          qtyInput.select()
-        })
       },
+      didDestroy: () => { productRoot?.unmount() },
       preConfirm: () => {
-        const productSelect = document.getElementById('item-product') as HTMLSelectElement | null
         const qtyInput = document.getElementById('item-qty') as HTMLInputElement | null
 
-        const productId = productSelect?.value ?? ''
+        const productId = selectedProductId
         const quantity = Number(qtyInput?.value ?? '1')
 
         if (!productId) {
@@ -554,9 +552,9 @@ export default function ServiceOrdersPage() {
     if (!selectedOrder || !initialUpdatePayload) {
       return false
     }
-    const current = normalizeUpdatePayload(formState, selectedOrder)
+    const current = normalizeUpdatePayload({ ...formState, technicianId: effectiveTechnicianId }, selectedOrder)
     return JSON.stringify(current) !== JSON.stringify(initialUpdatePayload)
-  }, [selectedOrder, initialUpdatePayload, formState, normalizeUpdatePayload])
+  }, [selectedOrder, initialUpdatePayload, formState, effectiveTechnicianId, normalizeUpdatePayload])
 
   const customerOptions = useMemo(
     () =>
@@ -572,7 +570,7 @@ export default function ServiceOrdersPage() {
           selectedOrder?.customerId === id && selectedOrder.customerName
             ? selectedOrder.customerName
             : `Cliente desconocido (ID: ${id})`,
-      }),
+      }).sort((a, b) => a.label.localeCompare(b.label, 'es', { sensitivity: 'base', numeric: true })),
     [customers, formState.customerId, selectedOrder],
   )
 
@@ -668,7 +666,7 @@ export default function ServiceOrdersPage() {
 
   const openCreatePanel = () => {
     setSelectedOrder(null)
-    setFormState({ ...emptyOrder, items: [] })
+    setFormState({ ...emptyOrder, technicianId: singleTechnicianId, estimatedDelivery: todayInChile(), items: [] })
     setDeviceTypeError('')
     setPanelOpen(true)
   }
@@ -792,7 +790,7 @@ export default function ServiceOrdersPage() {
             return
           }
 
-        const currentPayload = normalizeUpdatePayload(formState, selectedOrder)
+        const currentPayload = normalizeUpdatePayload({ ...formState, technicianId: effectiveTechnicianId }, selectedOrder)
         const payload = selectChangedFields(currentPayload, initialUpdatePayload ?? {})
         const updated = await serviceOrdersApi.update(orderId, payload)
         setOrders((prev) =>
@@ -809,7 +807,7 @@ export default function ServiceOrdersPage() {
       } else {
         const payload: CreateServiceOrderPayload = {
           customerId: trimText(formState.customerId),
-          technicianId: trimText(formState.technicianId) || undefined,
+          technicianId: trimText(effectiveTechnicianId) || undefined,
           deviceType: normalizedDeviceType,
           deviceBrand: trimText(formState.deviceBrand),
           deviceBrandId: formState.deviceBrandId || undefined,
@@ -1071,16 +1069,18 @@ export default function ServiceOrdersPage() {
             onChange={(event) => setQuery(event.target.value)}
           />
         </label>
-        <label className="order-status-filter">
-          <span>Estado de la OT</span>
-          <select value={statusFilter} onChange={event => setStatusFilter(event.target.value as ServiceOrderStatus | 'all')}>
-            <option value="all">Todos los estados ({orders.length})</option>
-            {(Object.keys(statusLabels) as ServiceOrderStatus[]).map(value => <option key={value} value={value}>{statusLabels[value]} ({orders.filter(order => (order.status ?? 'pending') === value).length})</option>)}
-          </select>
-        </label>
         <button className="btn btn-ghost" type="button" onClick={loadOrders}>
           Actualizar lista
         </button>
+      </div>
+
+      <div className="order-state-filters" role="group" aria-label="Filtrar por estado de la OT">
+        <span className="order-state-filters-label">Estado</span>
+        {(['all', ...Object.keys(statusLabels)] as (ServiceOrderStatus | 'all')[]).map(value => {
+          const count = value === 'all' ? orders.length : orders.filter(order => (order.status ?? 'pending') === value).length
+          const label = value === 'all' ? 'Todas' : statusLabels[value]
+          return <button key={value} type="button" className={`order-state-filter${statusFilter === value ? ' is-selected' : ''}`} aria-pressed={statusFilter === value} aria-label={`${label}: ${count} órdenes`} onClick={() => setStatusFilter(value)}><span>{label}</span><span className="order-state-count">{count}</span></button>
+        })}
       </div>
 
       {status === 'loading' && (
@@ -1242,36 +1242,7 @@ export default function ServiceOrdersPage() {
                       : 'Identifica al cliente y describe el equipo que queda en el servicio tecnico.'}
                   </p>
                   <div className="form-grid">
-                    <div className="field">
-                      <div className="field-label-actions">
-                        <label htmlFor="service-order-customer">Cliente</label>
-                        {!isEditing && canCreate && (
-                          <button
-                            className="btn btn-ghost btn-small"
-                            type="button"
-                            onClick={() => setQuickCustomerOpen(true)}
-                          >
-                            + Nuevo cliente
-                          </button>
-                        )}
-                      </div>
-                      <select
-                        id="service-order-customer"
-                        value={formState.customerId}
-                        onChange={(event) =>
-                          setFormState((prev) => ({ ...prev, customerId: event.target.value }))
-                        }
-                        required
-                        disabled={!canEditIntake}
-                      >
-                        <option value="">Selecciona un cliente</option>
-                        {customerOptions.map((customer) => (
-                          <option key={customer.id} value={customer.id}>
-                            {customer.label}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
+                    <SearchSelect label="Cliente" placeholder="Selecciona un cliente" value={formState.customerId} selectedName={customerOptions.find(customer => customer.id === formState.customerId)?.label} options={customerOptions.map(customer => ({ id: customer.id, name: customer.label, searchText: `${customer.label} ${(customersById[customer.id]?.rut ?? '').replace(/[^0-9kK]/g, '')}` }))} required disabled={!canEditIntake} onSelect={customer => { if (customer) setFormState(previous => ({ ...previous, customerId: customer.id })) }} labelAction={!isEditing && canCreate ? <button className="btn btn-ghost btn-small" type="button" onClick={() => setQuickCustomerOpen(true)}>+ Nuevo cliente</button> : undefined} />
                     <label className="field">
                       <span>Categoria o tipo de equipo</span>
                       <input
@@ -1346,7 +1317,7 @@ export default function ServiceOrdersPage() {
                   <p className="form-section-help">
                     {isEditing
                       ? 'Administra responsable, prioridad, avance y fecha comprometida.'
-                      : 'La asignacion y la fecha son opcionales y pueden definirse mas adelante.'}
+                      : 'Define la prioridad, el responsable y la fecha estimada de entrega.'}
                   </p>
                   <div className="form-grid">
                     {isEditing && (
@@ -1370,46 +1341,24 @@ export default function ServiceOrdersPage() {
                         </select>
                       </label>
                     )}
-                    <label className="field">
-                      <span>Prioridad</span>
-                      <select
-                        value={formState.priority ?? 'medium'}
-                        onChange={(event) =>
-                          setFormState((prev) => ({
-                            ...prev,
-                            priority: event.target.value as ServiceOrderPriority,
-                          }))
-                        }
-                        disabled={!canEditManagement}
-                      >
+                    <div className="field">
+                      <span id="order-priority-label">Prioridad</span>
+                      <div className="priority-checks" role="radiogroup" aria-labelledby="order-priority-label">
                         {Object.entries(priorityLabels).map(([value, label]) => (
-                          <option key={value} value={value}>
-                            {label}
-                          </option>
+                          <label key={value} className={(formState.priority ?? 'medium') === value ? 'is-selected' : ''}>
+                            <input type="radio" name="order-priority" value={value} checked={(formState.priority ?? 'medium') === value} disabled={!canEditManagement} onChange={() => setFormState(previous => ({ ...previous, priority: value as ServiceOrderPriority }))} />
+                            <span>{label}</span>
+                          </label>
                         ))}
-                      </select>
-                    </label>
-                    <label className="field">
-                      <span>Tecnico asignado</span>
-                      <select
-                        value={formState.technicianId ?? ''}
-                        onChange={(event) =>
-                          setFormState((prev) => ({ ...prev, technicianId: event.target.value }))
-                        }
-                        disabled={!canEditManagement}
-                      >
-                        <option value="">Sin asignar</option>
-                        {technicianOptions.map((technician) => (
-                          <option key={technician.id} value={technician.id}>
-                            {technician.label}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
+                      </div>
+                    </div>
+                    <SearchSelect label="Técnico asignado" placeholder="Selecciona un técnico" value={effectiveTechnicianId} selectedName={technicianOptions.find(technician => technician.id === effectiveTechnicianId)?.label} options={technicianOptions.map(technician => ({ id: technician.id, name: technician.label }))} disabled={!canEditManagement} emptyLabel="Sin asignar" allowClear={activeTechnicians.length !== 1} onSelect={technician => setFormState(previous => ({ ...previous, technicianId: technician?.id ?? '' }))} />
                     <label className="field">
                       <span>Fecha estimada</span>
                       <input
                         type="date"
+                        min={keepingHistoricalDate ? undefined : today}
+                        onInvalid={(event) => { event.preventDefault(); void Swal.fire({ icon: 'warning', title: 'Fecha inválida', text: 'La fecha estimada no puede ser anterior a hoy.' }) }}
                         value={formState.estimatedDelivery ?? ''}
                         onChange={(event) =>
                           setFormState((prev) => ({

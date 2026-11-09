@@ -1,3 +1,4 @@
+import SearchSelect from '../components/SearchSelect.tsx'
 import ListLoadingState from '../components/ListLoadingState.tsx'
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react'
 import Swal from 'sweetalert2'
@@ -395,21 +396,7 @@ export default function TechniciansPage() {
                   onChange={(event) => setFormState((prev) => ({ ...prev, phone: event.target.value }))}
                 />
               </label>
-              <label className="field">
-                <span>Especialidad</span>
-                <select
-                  value={formState.specialty ?? 'general'}
-                  onChange={(event) =>
-                    setFormState((prev) => ({ ...prev, specialty: event.target.value as TechnicianSpecialty }))
-                  }
-                >
-                  {Object.entries(specialtyLabels).map(([value, label]) => (
-                    <option key={value} value={value}>
-                      {label}
-                    </option>
-                  ))}
-                </select>
-              </label>
+              <SearchSelect label="Especialidad" placeholder="Selecciona una especialidad" value={formState.specialty ?? 'general'} options={Object.entries(specialtyLabels).map(([id, name]) => ({ id, name }))} searchable={false} allowClear={false} onSelect={option => { if (option) setFormState(previous => ({ ...previous, specialty: option.id as TechnicianSpecialty })) }} />
               {selectedTechnician && (
                 <label className="field">
                   <span>Estado</span>

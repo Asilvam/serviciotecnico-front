@@ -1,8 +1,16 @@
-import { useEffect, useId, useRef, useState, type KeyboardEvent } from 'react'
+import {
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  type KeyboardEvent,
+  type ReactNode,
+} from 'react'
 
 type Option = { id: string; name: string; searchText?: string }
 type Props = {
   label: string
+  labelAction?: ReactNode
   placeholder: string
   value: string
   selectedName?: string
@@ -11,6 +19,10 @@ type Props = {
   required?: boolean
   loading?: boolean
   error?: string
+  emptyLabel?: string
+  allowClear?: boolean
+  numericNameOnly?: boolean
+  searchable?: boolean
   onSelect: (option?: Option) => void
 }
 const normalize = (value: string) =>
@@ -24,13 +36,14 @@ export default function SearchSelect(props: Props) {
   const root = useRef<HTMLDivElement>(null)
   const trigger = useRef<HTMLButtonElement>(null)
   const search = useRef<HTMLInputElement>(null)
+  const list = useRef<HTMLDivElement>(null)
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
   const [active, setActive] = useState(0)
   const [invalid, setInvalid] = useState(false)
   const options = props.options.filter((option) =>
     normalize(
-      /^\d+$/.test(query.trim())
+      props.numericNameOnly && /^\d+$/.test(query.trim())
         ? option.name
         : (option.searchText ?? option.name),
     ).includes(normalize(query.trim())),
@@ -55,8 +68,11 @@ export default function SearchSelect(props: Props) {
     trigger.current?.focus()
   }
   useEffect(() => {
-    if (open) search.current?.focus()
-  }, [open])
+    if (open) {
+      if (props.searchable === false) list.current?.focus()
+      else search.current?.focus()
+    }
+  }, [open, props.searchable])
   useEffect(() => {
     if (!open) return
     const outside = (event: PointerEvent) => {
@@ -69,9 +85,10 @@ export default function SearchSelect(props: Props) {
     document.addEventListener('pointerdown', outside)
     return () => document.removeEventListener('pointerdown', outside)
   }, [open])
-  const keyboard = (event: KeyboardEvent<HTMLInputElement>) => {
+  const keyboard = (event: KeyboardEvent<HTMLElement>) => {
     if (event.key === 'Escape') {
       event.preventDefault()
+      event.stopPropagation()
       close()
       trigger.current?.focus()
     }
@@ -90,8 +107,9 @@ export default function SearchSelect(props: Props) {
         .getElementById(`${id}-option-${next}`)
         ?.scrollIntoView({ block: 'nearest' })
     }
-    if (event.key === 'Enter') {
+    if (event.key === 'Enter' || (props.searchable === false && event.key === ' ')) {
       event.preventDefault()
+      event.stopPropagation()
       if (options[active]) choose(options[active])
     }
   }
@@ -103,9 +121,18 @@ export default function SearchSelect(props: Props) {
         if (!event.currentTarget.contains(event.relatedTarget)) close()
       }}
     >
-      <label id={`${id}-label`} htmlFor={`${id}-trigger`}>
-        {props.label}
-      </label>
+      {props.labelAction ? (
+        <div className="field-label-actions">
+          <label id={`${id}-label`} htmlFor={`${id}-trigger`}>
+            {props.label}
+          </label>
+          {props.labelAction}
+        </div>
+      ) : (
+        <label id={`${id}-label`} htmlFor={`${id}-trigger`}>
+          {props.label}
+        </label>
+      )}
       <button
         id={`${id}-trigger`}
         ref={trigger}
@@ -132,53 +159,65 @@ export default function SearchSelect(props: Props) {
         </span>
         <span aria-hidden="true">▾</span>
       </button>
-      <select
-        className="search-select-validation"
-        aria-hidden="true"
-        tabIndex={-1}
-        required={props.required}
-        disabled={props.disabled}
-        value={props.value}
-        onChange={() => undefined}
-        onInvalid={(event) => {
-          event.preventDefault()
-          setInvalid(true)
-          trigger.current?.focus()
-        }}
-      >
-        <option value="" />
-        {props.value && <option value={props.value}>{current}</option>}
-      </select>
-      {invalid && <small role="alert">Selecciona una marca.</small>}
+      {props.required && (
+        <select
+          className="search-select-validation"
+          aria-hidden="true"
+          tabIndex={-1}
+          required={props.required}
+          disabled={props.disabled}
+          value={props.value}
+          onChange={() => undefined}
+          onInvalid={(event) => {
+            event.preventDefault()
+            setInvalid(true)
+            trigger.current?.focus()
+          }}
+        >
+          <option value="" />
+          {props.value && <option value={props.value}>{current}</option>}
+        </select>
+      )}
+      {invalid && <small role="alert">{props.placeholder}.</small>}
       {open && !props.disabled && (
         <div className="search-select-popup">
-          <input
-            ref={search}
-            role="combobox"
-            aria-label={`Buscar ${props.label.toLocaleLowerCase('es')}`}
-            aria-expanded="true"
-            aria-controls={`${id}-list`}
-            aria-autocomplete="list"
-            aria-activedescendant={
-              options[active] ? `${id}-option-${active}` : undefined
-            }
-            type="search"
-            placeholder="Escribe para buscar…"
-            autoComplete="off"
-            value={query}
-            onChange={(event) => {
-              setQuery(event.target.value)
-              setActive(0)
-            }}
-            onKeyDown={keyboard}
-          />
+          {props.searchable !== false && (
+            <input
+              ref={search}
+              role="combobox"
+              aria-label={`Buscar ${props.label.toLocaleLowerCase('es')}`}
+              aria-expanded="true"
+              aria-controls={`${id}-list`}
+              aria-autocomplete="list"
+              aria-activedescendant={
+                options[active] ? `${id}-option-${active}` : undefined
+              }
+              type="search"
+              placeholder="Escribe para buscar…"
+              autoComplete="off"
+              value={query}
+              onChange={(event) => {
+                setQuery(event.target.value)
+                setActive(0)
+              }}
+              onKeyDown={keyboard}
+            />
+          )}
           <div
+            ref={list}
+            tabIndex={props.searchable === false ? 0 : undefined}
+            onKeyDown={props.searchable === false ? keyboard : undefined}
+            aria-activedescendant={
+              props.searchable === false && options[active]
+                ? `${id}-option-${active}`
+                : undefined
+            }
             id={`${id}-list`}
             role="listbox"
             aria-labelledby={`${id}-label`}
             className="search-select-list"
           >
-            {!props.required && !query && (
+            {!props.required && props.allowClear !== false && !query && (
               <button
                 type="button"
                 role="option"
@@ -187,7 +226,7 @@ export default function SearchSelect(props: Props) {
                 onMouseDown={(event) => event.preventDefault()}
                 onClick={() => choose()}
               >
-                Dejar sin modelo
+                {props.emptyLabel ?? 'Continuar sin modelo'}
               </button>
             )}
             {options.map((option, index) => (

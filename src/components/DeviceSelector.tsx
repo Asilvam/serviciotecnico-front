@@ -119,7 +119,7 @@ export default function DeviceSelector(props: Props) {
           />
         </label>
         <label className="field">
-          <span>Modelo (opcional)</span>
+          <span>Modelo</span>
           <input
             value={(props.deviceModel ?? '').toLocaleUpperCase('es')}
             disabled={props.disabled}
@@ -183,9 +183,10 @@ export default function DeviceSelector(props: Props) {
       />
       <SearchSelect
         key={brandId}
-        label="Modelo (opcional)"
+        numericNameOnly
+        label="Modelo"
         placeholder={
-          brandId ? 'Selecciona un modelo' : 'Selecciona primero una marca'
+          brandId ? 'Selecciona un modelo' : 'Primero elige una marca'
         }
         value={props.deviceModelId ?? ''}
         selectedName={props.deviceModel ?? ''}

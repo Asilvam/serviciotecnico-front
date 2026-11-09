@@ -110,10 +110,11 @@ export function useCustomers(canChangeStatus = false) {
    */
   const filteredCustomers = useMemo(() => {
     const normalized = query.trim().toLowerCase()
+    const alphabetical = [...customers].sort((a, b) => a.name.localeCompare(b.name, 'es', { sensitivity: 'base', numeric: true }))
     if (!normalized) {
-      return customers
+      return alphabetical
     }
-    return customers.filter((customer) => {
+    return alphabetical.filter((customer) => {
       return (
         customer.name.toLowerCase().includes(normalized) ||
         (customer.email ?? '').toLowerCase().includes(normalized) ||

@@ -6,7 +6,10 @@ function parseDate(value?: string): Date | undefined {
   return Number.isNaN(parsed.getTime()) ? undefined : parsed
 }
 
-export function formatChileDate(value?: string, fallback = 'Sin fecha'): string {
+export function formatChileDate(
+  value?: string,
+  fallback = 'Sin fecha',
+): string {
   const parsed = parseDate(value)
   if (!parsed) return value || fallback
 
@@ -16,7 +19,10 @@ export function formatChileDate(value?: string, fallback = 'Sin fecha'): string 
   }).format(parsed)
 }
 
-export function formatChileDateTime(value?: string, fallback = 'Sin fecha informada'): string {
+export function formatChileDateTime(
+  value?: string,
+  fallback = 'Sin fecha informada',
+): string {
   const parsed = parseDate(value)
   if (!parsed) return value || fallback
 
@@ -44,4 +50,16 @@ export function formatChileCalendarDate(
     dateStyle: 'medium',
     timeZone: 'UTC',
   }).format(new Date(`${calendarDate}T00:00:00.000Z`))
+}
+
+export function todayInChile(now = new Date()): string {
+  const parts = new Intl.DateTimeFormat('en', {
+    timeZone: CHILE_TIME_ZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(now)
+  const part = (type: string) =>
+    parts.find((value) => value.type === type)?.value ?? ''
+  return `${part('year')}-${part('month')}-${part('day')}`
 }

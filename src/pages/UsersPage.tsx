@@ -1,3 +1,4 @@
+import SearchSelect from '../components/SearchSelect.tsx'
 import ListLoadingState from '../components/ListLoadingState.tsx'
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react'
 import Swal from 'sweetalert2'
@@ -459,25 +460,7 @@ export default function UsersPage() {
                   required
                 />
               </label>
-              <label className="field">
-                <span>Rol</span>
-                <select
-                  value={formState.role ?? 'receptionist'}
-                  onChange={(event) =>
-                    setFormState((prev) => ({
-                      ...prev,
-                      role: event.target.value as UserRole,
-                      technicianId: event.target.value === 'technician' ? prev.technicianId : '',
-                    }))
-                  }
-                >
-                  {Object.entries(roleLabels).map(([value, label]) => (
-                    <option key={value} value={value}>
-                      {label}
-                    </option>
-                  ))}
-                </select>
-              </label>
+              <SearchSelect label="Rol" placeholder="Selecciona un rol" value={formState.role ?? 'receptionist'} options={Object.entries(roleLabels).map(([id, name]) => ({ id, name }))} searchable={false} allowClear={false} onSelect={option => { if (option) setFormState(previous => ({ ...previous, role: option.id as UserRole, technicianId: option.id === 'technician' ? previous.technicianId : '' })) }} />
               {formState.role === 'technician' && (
                 <label className="field">
                   <span>Perfil tecnico vinculado</span>
