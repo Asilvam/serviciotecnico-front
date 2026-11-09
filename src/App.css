@@ -1400,3 +1400,5 @@
 
 /* Top-layer menus escape modal clipping without changing form layout. */
 .search-select-popup[popover] { position: fixed !important; right: auto; margin: 0 !important; box-sizing: border-box; }
+
+.footer-version { display: inline-flex; flex-wrap: wrap; justify-content: flex-end; gap: 4px 12px; font-variant-numeric: tabular-nums; }
