@@ -1,3 +1,4 @@
+import { matchesSelectOption } from '../utils/selectSearch.ts'
 import {
   useEffect,
   useId,
@@ -25,11 +26,6 @@ type Props = {
   searchable?: boolean
   onSelect: (option?: Option) => void
 }
-const normalize = (value: string) =>
-  value
-    .normalize('NFKD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLocaleLowerCase('es')
 
 export default function SearchSelect(props: Props) {
   const id = useId()
@@ -43,13 +39,7 @@ export default function SearchSelect(props: Props) {
   const [query, setQuery] = useState('')
   const [active, setActive] = useState(0)
   const [invalid, setInvalid] = useState(false)
-  const options = props.options.filter((option) =>
-    normalize(
-      props.numericNameOnly && /^\d+$/.test(query.trim())
-        ? option.name
-        : (option.searchText ?? option.name),
-    ).includes(normalize(query.trim())),
-  )
+  const options = props.options.filter(option => matchesSelectOption(option, query, props.numericNameOnly))
   const current =
     props.options.find((option) => option.id === props.value)?.name ||
     props.selectedName
